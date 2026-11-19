@@ -15,122 +15,141 @@
       </span>
       <span>Bursary <strong>Radar</strong></span>
     </a>
-    <div class="topbar-actions">
-      <nav aria-label="Primary">
-        <a href="#matches">Find funding</a>
-        <a href="#fee-gap">Fee-gap planner</a>
-      </nav>
-      {% if user %}
-      <div class="account-menu">
-        <span class="account-name">{{ user.full_name }}</span>
-        <form method="post" action="{{ url_for('logout') }}">
-          <button class="logout-button" type="submit">Log out</button>
-        </form>
-      </div>
-      {% endif %}
-    </div>
+    <nav aria-label="Primary">
+      <a href="#find" data-i18n="nav.find">Find funding</a>
+      <a href="#fee-gap" data-i18n="nav.fees">Fee-gap planner</a>
+      <a href="#plan" data-i18n="nav.plan">My plan</a>
+      <a href="#verify" data-i18n="nav.verify">How we verify</a>
+    </nav>
+    <button id="languageToggle" class="logout-button" type="button" aria-label="Switch language">Swahili</button>
   </header>
 
   <main>
+    {% if poll_only %}
+    <section id="poll" class="poll-page">
+      <p class="eyebrow">PROTOTYPE PITCH</p>
+      <h1>Live student poll</h1>
+      <div id="pollQuestions" class="poll-grid"></div>
+    </section>
+    {% elif admin_only %}
+    <section class="admin-page">
+      <h1>Admin review</h1>
+      <p>Enter your token to load the review tools. It stays in memory only.</p>
+      <form id="adminLogin" class="fee-form">
+        <label>Admin token<input id="adminToken" type="password" autocomplete="off"></label>
+        <button class="primary-button" type="submit">Load admin tools</button>
+      </form>
+      <div id="adminOutput" class="admin-output"></div>
+    </section>
+    {% else %}
+    <div class="prototype-banner">Prototype. Data compiled from public sources and not yet confirmed by funders' offices.</div>
     <section class="hero">
       <div>
-        <span class="eyebrow">MACHAKOS UNIVERSITY HACKFEST 2026</span>
-        <h1>Every bursary you qualify for.<br><span>Before it closes.</span></h1>
-        <p>Create a short profile to find relevant funding, understand your fee gap and prepare before deadlines.</p>
+        <span class="eyebrow">KENYAN STUDENT FUNDING GUIDE</span>
+        <h1 data-i18n="hero.title">Find funding you can apply for.</h1>
+        <p data-i18n="hero.copy">A private, browser-first way to understand opportunities and prepare before deadlines.</p>
+        <button id="sampleButton" class="primary-button hero-button" type="button">Try as a sample student</button>
       </div>
-      <div class="hero-card" aria-label="Demo summary">
-        <strong>20+</strong>
-        <span>opportunity sources</span>
-      </div>
+      <div class="hero-card" aria-label="Opportunity sources"><strong id="opportunityCount">7</strong><span>seed opportunities</span></div>
     </section>
 
-    <div class="warning-banner">
-      <strong>Safety first:</strong> Never pay to apply for a bursary.
-      <span>All listings are demo data and must be verified officially.</span>
-    </div>
+    <div class="warning-banner"><strong>Safety first:</strong> Never pay money to apply. <span>Always confirm details at the official source.</span></div>
 
-    <section class="workspace">
+    <section id="find" class="workspace">
       <aside class="profile-panel">
-        <div class="step-title"><span>1</span><div><small>YOUR PROFILE</small><h2>What are you studying?</h2></div></div>
+        <div class="step-title"><span id="wizardStep">1</span><div><small>YOUR PROFILE</small><h2 id="wizardTitle">Level of study</h2></div></div>
         <form id="profileForm">
-          <label>Level of study
-            <select name="level" required>
-              <option>University</option>
-              <option>TVET</option>
-            </select>
-          </label>
-          <label>Institution type
-            <select name="institution_type" required>
-              <option>Public</option>
-              <option>Private</option>
-            </select>
-          </label>
-          <label>Home county
-            <select name="county">
-              <option>Machakos</option>
-              <option>All</option>
-            </select>
-          </label>
-          <label>Constituency
-            <select name="constituency">
-              <option>Machakos Town</option>
-              <option>Masinga</option>
-              <option>Yatta</option>
-              <option>Kangundo</option>
-              <option>Matungulu</option>
-              <option>Kathiani</option>
-              <option>Mavoko</option>
-              <option>Mwala</option>
-              <option>Athi River</option>
-              <option>Kalama</option>
-            </select>
-          </label>
-          <div class="check-grid">
-            <label><input type="checkbox" name="need_flag"> Low-income household</label>
-            <label><input type="checkbox" name="disability"> Living with disability</label>
+          <div class="wizard-step active" data-step="1">
+            <label>Level of study<select name="level" required><option value="">Select</option><option value="secondary">Secondary</option><option value="tvet">TVET</option><option value="university">University</option></select></label>
+            <label>Institution type<select name="institution_type"><option value="">Not sure</option><option value="public">Public</option><option value="private">Private</option></select></label>
+            <label>Institution name<input name="institution_name" placeholder="Optional"></label>
           </div>
-          <label class="consent"><input type="checkbox" required> I consent to using this information to find matches.</label>
-          <button class="primary-button" type="submit">Find my matches</button>
+          <div class="wizard-step" data-step="2">
+            <label>Year of study<input name="year_of_study" type="number" min="1" max="8" placeholder="For example 1"></label>
+          </div>
+          <div class="wizard-step" data-step="3">
+            <label>County<select name="county" required><option value="">Select</option><option>Machakos</option><option>Makueni</option><option>Kitui</option><option>Tharaka-Nithi</option><option>Kisumu</option><option>Siaya</option></select></label>
+            <label>Constituency<select name="constituency"><option value="">Not sure</option><option>Mwala</option><option>Matungulu</option><option>Machakos Town</option></select></label>
+          </div>
+          <div class="wizard-step" data-step="4">
+            <p class="privacy-note">Optional. These indicators are sent only to the matching API and are never stored.</p>
+            <div class="check-grid">
+              <label><input type="checkbox" name="need_flag" value="orphan"> Orphan</label>
+              <label><input type="checkbox" name="need_flag" value="disability"> Disability</label>
+              <label><input type="checkbox" name="need_flag" value="low_income"> Low income</label>
+              <label><input type="checkbox" name="need_flag" value="single_parent"> Single parent household</label>
+            </div>
+          </div>
+          <div class="wizard-step" data-step="5">
+            <p>Review your profile, then request matches. No identifying data is stored.</p>
+            <div id="profileReview"></div>
+          </div>
+          <div class="wizard-actions">
+            <button id="wizardBack" class="outline-button" type="button" hidden>Back</button>
+            <button id="wizardNext" class="primary-button" type="button">Next</button>
+            <button id="wizardSubmit" class="primary-button" type="submit" hidden>Find opportunities</button>
+          </div>
         </form>
       </aside>
 
       <div class="content">
         <section id="matches" class="matches-section">
           <div class="section-heading">
-            <div><small>PERSONALISED RESULTS</small><h2>Your funding matches</h2></div>
-            <span id="matchCount" class="count-pill">0 matches</span>
+            <div><small>PERSONALISED RESULTS</small><h2>Opportunities you can apply for</h2></div>
+            <span id="matchCount" class="count-pill">0 opportunities</span>
           </div>
-          <div id="matchesList" class="matches-list">
-            <div class="empty-state">Complete your profile to see opportunities.</div>
-          </div>
+          <div id="matchesList" class="matches-list"><div class="empty-state">Complete the profile to see opportunities.</div></div>
         </section>
 
         <section id="fee-gap" class="planner">
           <div class="step-title"><span>2</span><div><small>FEE-GAP PLANNER</small><h2>What is still unpaid?</h2></div></div>
           <form id="feeForm" class="fee-form">
-            <label>Annual fees (KES)<input name="fees" type="number" min="0" value="100000"></label>
+            <label>Annual fees (KES)<input name="annual_fees" type="number" min="0" value="100000"></label>
             <label>Government scholarship (KES)<input name="scholarship" type="number" min="0" value="40000"></label>
-            <label>HELB loan (KES)<input name="helb" type="number" min="0" value="30000"></label>
+            <label>HELB loan (KES)<input name="loan" type="number" min="0" value="30000"></label>
+            <label>Other aid (KES)<input name="other_aid" type="number" min="0" value="0"></label>
             <button class="secondary-button" type="submit">Calculate gap</button>
           </form>
           <div class="gap-result">
-            <span>Remaining fee gap</span>
-            <strong id="gapAmount">KES 30,000</strong>
+            <div><span>Remaining fee gap</span><strong id="gapAmount">KES 30,000</strong></div>
+            <div class="progress-track"><div id="gapProgress" class="progress-fill" style="width:70%"></div></div>
           </div>
+          <p class="planning-note">Awards are discretionary; this is a planning estimate, not a promise.</p>
+          <div id="gapSuggestions"></div>
         </section>
 
-        <section class="reminder-card">
+        <section id="plan" class="reminder-card">
           <div>
-            <small>DEADLINE REMINDER</small>
-            <h2>SMS preview</h2>
-            <p id="smsText">Apply early and keep a checklist of required documents.</p>
+            <small>MY PLAN</small>
+            <h2>Saved opportunities</h2>
+            <p id="planSummary">Nothing saved yet. Use “Add to my plan” on an opportunity.</p>
+            <div id="planList"></div>
           </div>
-          <button id="smsButton" class="secondary-button" type="button">Preview reminder</button>
+          <button id="smsButton" class="secondary-button" type="button">Preview SMS reminders</button>
+        </section>
+
+        <section id="verify" class="planner">
+          <small>HOW WE VERIFY</small>
+          <h2>Confidence is not a promise</h2>
+          <div class="confidence-guide">
+            <p><strong>Green:</strong> Official or university source, checked within 14 days, with a deadline or closed status.</p>
+            <p><strong>Amber:</strong> Credible secondary source, or an older official source, or a confirmed opportunity with no deadline.</p>
+            <p><strong>Red:</strong> Never verified or sourced from an aggregator/other source.</p>
+          </div>
+          <p>AI extraction, if used, creates drafts for human review. It never publishes automatically. No profile details are stored.</p>
         </section>
       </div>
     </section>
+    <section id="feedback" class="feedback-widget">
+      <h2>Was this useful?</h2>
+      <div id="feedbackStars" class="feedback-stars" aria-label="Rating"></div>
+      <textarea id="feedbackComment" maxlength="300" placeholder="Optional feedback (300 characters maximum)"></textarea>
+      <button id="feedbackSubmit" class="secondary-button" type="button">Send feedback</button>
+    </section>
+    {% endif %}
   </main>
 
+<<<<<<< HEAD
   <template id="matchTemplate">
     <article class="match-card">
       <div class="match-main">
@@ -149,6 +168,11 @@
       </div>
     </article>
   </template>
+=======
+  <footer>
+    <p>Bursary Radar is an independent student project. It is not affiliated with HELB, the Universities Fund, NG-CDF, county governments or any funder. Always confirm details at the official source. Never pay money to apply for a bursary.</p>
+  </footer>
+>>>>>>> aa9dbcffb7079b9573f002ee7256c7dbd9c98123
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
