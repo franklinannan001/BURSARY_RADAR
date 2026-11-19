@@ -35,6 +35,22 @@ This is a hackathon MVP built with Python and Flask. It provides:
 
 5. Open `http://127.0.0.1:5000`.
 
+### Open from another device
+
+The app listens on all network interfaces by default. Start it with:
+
+```powershell
+python app.py
+```
+
+Find the host computer's IPv4 address with `ipconfig`, then open
+`http://<host-ipv4-address>:5000` on another device connected to the same network.
+For example: `http://192.168.1.25:5000`.
+
+Allow Python/Flask through Windows Defender Firewall for private networks if Windows
+prompts. Internet users who are not on the same network require hosting with port
+forwarding or a cloud tunnel/deployment service.
+
 ## Project structure
 
 ```text
