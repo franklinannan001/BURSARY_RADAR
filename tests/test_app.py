@@ -156,6 +156,8 @@ def test_notice_reader_mock_and_injection_is_data():
 
 def test_public_pages_and_seed_count():
     client = app.test_client()
-    assert client.get("/").status_code == 200
+    assert client.get("/").status_code == 302
+    assert client.get("/login").status_code == 200
+    assert client.get("/signup").status_code == 200
     assert client.get("/healthz").status_code == 200
     assert len(client.get("/api/opportunities").get_json()) >= 7

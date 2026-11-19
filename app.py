@@ -6,9 +6,10 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from bursary_model import (
     DB_PATH,
@@ -22,9 +23,54 @@ from bursary_model import (
 
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "bursary-radar-local-development-key")
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 limiter = Limiter(key_func=get_remote_address, app=app, default_limits=["300 per hour"])
 init_db()
+USERS_DB = DB_PATH
+
+
+def init_users_db():
+    with sqlite3.connect(USERS_DB) as connection:
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                enrollment_no TEXT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                gender TEXT,
+                date_of_birth TEXT,
+                course TEXT
+            )
+        """)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
+        if "email" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
+
+
+init_users_db()
+
+
+def current_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    with sqlite3.connect(USERS_DB) as connection:
+        connection.row_factory = sqlite3.Row
+        return connection.execute(
+            "SELECT id, full_name, enrollment_no, email, course FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not current_user():
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
@@ -70,8 +116,77 @@ def admin_required(view):
 
 
 @app.route("/")
+@login_required
 def index():
+    if current_user():
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login"))
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
     return render_template("index.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user():
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        with sqlite3.connect(USERS_DB) as connection:
+            connection.row_factory = sqlite3.Row
+            user = connection.execute(
+                "SELECT * FROM users WHERE email=?", (email,)
+            ).fetchone()
+        if user and check_password_hash(user["password_hash"], password):
+            session.clear()
+            session["user_id"] = user["id"]
+            return redirect(url_for("dashboard"))
+        error = "Invalid email or password."
+    return render_template("auth.html", mode="login", error=error)
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if current_user():
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        enrollment_no = request.form.get("enrollment_no", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        gender = request.form.get("gender", "")
+        date_of_birth = request.form.get("date_of_birth", "")
+        course = request.form.get("course", "").strip()
+        if not all((full_name, email, password)):
+            error = "Name, email and password are required."
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters."
+        else:
+            try:
+                with sqlite3.connect(USERS_DB) as connection:
+                    connection.execute(
+                        """INSERT INTO users
+                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course)
+                        VALUES (?,?,?,?,?,?,?)""",
+                        (full_name, enrollment_no, email, generate_password_hash(password),
+                         gender, date_of_birth, course),
+                    )
+                return redirect(url_for("login"))
+            except sqlite3.IntegrityError:
+                error = "An account with that email already exists."
+    return render_template("auth.html", mode="signup", error=error)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/healthz")
