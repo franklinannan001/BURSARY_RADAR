@@ -436,6 +436,7 @@ summary:focus-visible {
 .gender-field input { width: 16px; height: 16px; }
 .date-field input { min-width: 0; }
 .course-field { grid-column: 1 / -1; }
+.level-field, .course-field, .custom-course-field { margin-top: 12px; }
 .auth-actions { display: flex; justify-content: center; gap: 12px; margin-top: 18px; }
 .auth-actions .auth-primary { width: 180px; height: 54px; font-size: 18px; background: var(--green); color: white; }
 .auth-secondary { width: 140px; height: 54px; border: 0; border-radius: 9px; background: var(--red); color: white; cursor: pointer; font-size: 18px; font-weight: 800; }

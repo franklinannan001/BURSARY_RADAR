@@ -59,16 +59,18 @@
             <label><input type="radio" name="gender" value="Other"> Other</label>
           </fieldset>
           <label class="date-field"><strong>Student date of birth:</strong><input type="date" name="date_of_birth"></label>
-          <label class="course-field"><strong>Course:</strong><select name="course">
-            <option value="">Select a course</option>
-            <option>Computer Engineering</option>
-            <option>Education</option>
-            <option>Business</option>
-            <option>Medicine</option>
-            <option>Law</option>
-            <option>Other</option>
-          </select></label>
         </div>
+        <label class="level-field"><strong>Level of study:</strong><select id="studyLevel" name="study_level" required>
+          <option value="">Select your level</option>
+          <option value="Primary">Primary</option>
+          <option value="Junior Secondary">Junior Secondary</option>
+          <option value="Senior Secondary">Senior Secondary</option>
+          <option value="Tertiary">Tertiary level</option>
+        </select></label>
+        <label class="course-field"><strong id="courseLabel">Grade or course:</strong><select id="courseSelect" name="course" required disabled>
+          <option value="">Select your level first</option>
+        </select></label>
+        <label id="customCourseField" class="custom-course-field" hidden><strong>Your course name:</strong><input id="customCourse" name="custom_course" type="text" placeholder="Enter your course name" maxlength="120"></label>
         <div class="auth-actions">
           <button class="auth-primary register-button" type="submit">Register</button>
           <button class="auth-secondary" type="reset">Reset</button>
@@ -78,5 +80,8 @@
       {% endif %}
     </section>
   </main>
+  {% if mode == "signup" %}
+  <script src="{{ url_for('static', filename='signup.js') }}"></script>
+  {% endif %}
 </body>
 </html>

@@ -1,8 +1,10 @@
 import json
+import sqlite3
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from app import app
-from bursary_model import compute_confidence, match_opportunities
+from bursary_model import DB_PATH, compute_confidence, match_opportunities
 
 
 def test_confidence_green_14_day_boundary():
@@ -193,3 +195,53 @@ def test_public_pages_and_removed_seed_entries():
     }
     returned_ids = {item["id"] for item in client.get("/api/opportunities").get_json()}
     assert not bundled_ids.intersection(returned_ids)
+
+
+def test_signup_study_level_and_grade_or_course():
+    client = app.test_client()
+    signup_page = client.get("/signup")
+    assert b'name="study_level"' in signup_page.data
+    assert b'id="courseSelect"' in signup_page.data
+    assert b'static/signup.js' in signup_page.data
+
+    suffix = uuid.uuid4().hex
+    registrations = [
+        ("Primary", "Grade 1", "", "Grade 1"),
+        ("Junior Secondary", "Grade 9", "", "Grade 9"),
+        ("Senior Secondary", "Grade 12", "", "Grade 12"),
+        ("Tertiary", "Medicine", "", "Medicine"),
+        ("Tertiary", "Other", "Marine Biology", "Marine Biology"),
+    ]
+    emails = []
+    try:
+        for index, (level, course, custom_course, expected_course) in enumerate(registrations):
+            email = f"signup-{suffix}-{index}@example.com"
+            emails.append(email)
+            response = client.post("/signup", data={
+                "full_name": "Signup Test",
+                "email": email,
+                "password": "secure123",
+                "study_level": level,
+                "course": course,
+                "custom_course": custom_course,
+            })
+            assert response.status_code == 302
+            with sqlite3.connect(DB_PATH) as connection:
+                row = connection.execute(
+                    "SELECT study_level,course FROM users WHERE email=?",
+                    (email,),
+                ).fetchone()
+            assert row == (level, expected_course)
+
+        invalid_response = client.post("/signup", data={
+            "full_name": "Signup Test",
+            "email": f"invalid-{suffix}@example.com",
+            "password": "secure123",
+            "study_level": "Primary",
+            "course": "Grade 7",
+        })
+        assert invalid_response.status_code == 200
+        assert b"Select a grade that belongs to the selected level" in invalid_response.data
+    finally:
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.executemany("DELETE FROM users WHERE email=?", [(email,) for email in emails])

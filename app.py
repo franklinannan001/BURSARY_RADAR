@@ -40,12 +40,15 @@ def init_users_db():
                 password_hash TEXT NOT NULL,
                 gender TEXT,
                 date_of_birth TEXT,
-                course TEXT
+                course TEXT,
+                study_level TEXT
             )
         """)
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
         if "email" not in columns:
             connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        if "study_level" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN study_level TEXT")
 
 
 init_users_db()
@@ -58,7 +61,7 @@ def current_user():
     with sqlite3.connect(USERS_DB) as connection:
         connection.row_factory = sqlite3.Row
         return connection.execute(
-            "SELECT id, full_name, enrollment_no, email, course FROM users WHERE id=?",
+            "SELECT id, full_name, enrollment_no, email, course, study_level FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
 
@@ -161,20 +164,45 @@ def signup():
         password = request.form.get("password", "")
         gender = request.form.get("gender", "")
         date_of_birth = request.form.get("date_of_birth", "")
+        study_level = request.form.get("study_level", "")
         course = request.form.get("course", "").strip()
+        custom_course = request.form.get("custom_course", "").strip()
+        valid_levels = {
+            "Primary": range(1, 7),
+            "Junior Secondary": range(7, 10),
+            "Senior Secondary": range(10, 13),
+        }
+        tertiary_courses = {
+            "Computer Science", "Computer Engineering", "Civil Engineering",
+            "Electrical Engineering", "Mechanical Engineering", "Information Technology",
+            "Education", "Nursing", "Medicine", "Law", "Business Administration",
+            "Accounting", "Agriculture", "Other",
+        }
         if not all((full_name, email, password)):
             error = "Name, email and password are required."
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
+        elif study_level not in (*valid_levels.keys(), "Tertiary"):
+            error = "Select a valid level of study."
+        elif study_level in valid_levels and course not in {
+            f"Grade {grade}" for grade in valid_levels[study_level]
+        }:
+            error = "Select a grade that belongs to the selected level."
+        elif study_level == "Tertiary" and course == "Other" and not custom_course:
+            error = "Enter your course name."
+        elif study_level == "Tertiary" and course not in tertiary_courses:
+            error = "Select a course or choose Other."
         else:
+            if study_level == "Tertiary" and course == "Other":
+                course = custom_course
             try:
                 with sqlite3.connect(USERS_DB) as connection:
                     connection.execute(
                         """INSERT INTO users
-                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course)
-                        VALUES (?,?,?,?,?,?,?)""",
+                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course,study_level)
+                        VALUES (?,?,?,?,?,?,?,?)""",
                         (full_name, enrollment_no, email, generate_password_hash(password),
-                         gender, date_of_birth, course),
+                         gender, date_of_birth, course, study_level),
                     )
                 return redirect(url_for("login"))
             except sqlite3.IntegrityError:
