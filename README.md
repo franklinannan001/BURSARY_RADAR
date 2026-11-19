@@ -11,7 +11,6 @@ Screenshots can be placed here:
 - Landing and sample profile
 - Five-step profile wizard
 - Matched opportunity cards
-- Fee-Gap Planner
 - My Plan and SMS preview
 - `/poll` and `/admin`
 
@@ -21,7 +20,7 @@ Screenshots can be placed here:
 flowchart LR
   Student[Student browser] --> Flask[Flask/Jinja frontend]
   Flask --> API["Public /api endpoints"]
-  API --> SQLite[(SQLite / data seed)]
+  API --> SQLite[(SQLite / admin-managed listings)]
   Admin[Human reviewer] -->|X-Admin-Token| API
   API --> Draft[Notice Reader draft]
   Draft -->|Approval| SQLite
@@ -58,7 +57,6 @@ Open `http://127.0.0.1:5000`.
 - `GET /api/opportunities`
 - `GET /api/opportunities/{id}`
 - `POST /api/match`
-- `POST /api/fee-gap`
 - `POST /api/reminders/preview`
 - `POST /api/reports`
 - `POST /api/feedback`
@@ -74,7 +72,7 @@ Open `/api` is not used by Flask; no Swagger UI is enabled. Admin routes use the
 python -m pytest -q
 ```
 
-The tests cover confidence, public/private matching, county and constituency restrictions, fee gaps, reminder schedules, privacy-safe public pages and admin authentication.
+The tests cover confidence, public/private matching, county and constituency restrictions, reminder schedules, removed features, privacy-safe public pages and admin authentication.
 
 ## Deploy on Render
 
@@ -87,12 +85,11 @@ The tests cover confidence, public/private matching, county and constituency res
 ## SQLite and redeployment
 
 Render's default disk is ephemeral. SQLite edits and verification dates may disappear on redeploy.
-Export reviewed data with `GET /api/admin/export` and commit it to `data/opportunities.seed.json`, or configure a persistent PostgreSQL database.
+Export reviewed data with `GET /api/admin/export` as a backup, or configure a persistent PostgreSQL database. The application no longer seeds opportunity records on startup.
 
 ## Seed and verification
 
-The database starts with exactly seven entries from `data/opportunities.seed.json`. It does not add or invent opportunities.
-Unknown values remain null and are presented as “Not confirmed” or “Amount not published”.
+The database starts without opportunity listings. Add reviewed entries through the admin API; no sample or seed opportunities are bundled. Unknown values remain null and are presented as “Not confirmed” or “Amount not published”.
 
 See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) and [ROADMAP.md](docs/ROADMAP.md).
 

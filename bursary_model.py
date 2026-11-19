@@ -1,11 +1,19 @@
 import json
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 DB_PATH = Path(__file__).resolve().parent / "bursary_radar.db"
-SEED_PATH = Path(__file__).resolve().parent / "data" / "opportunities.seed.json"
+REMOVED_SEED_IDS = (
+    "hef-government-scholarship",
+    "helb-loan",
+    "machakos-county-bursary",
+    "machakos-university-internal-bursary",
+    "ngcdf-mwala-bursary",
+    "ngcdf-matungulu-bursary",
+    "uoem-tvet-mpesa-scholarship",
+)
 
 
 def get_connection():
@@ -103,41 +111,25 @@ def init_db():
                 answer TEXT, created_at TEXT
             )
         """)
-        seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
-        now = datetime.now(timezone.utc).isoformat()
-        for item in seed:
-            columns = [
-                "levels", "institution_types", "counties", "constituencies",
-                "need_flags", "documents_required",
-            ]
-            row = dict(item)
-            for column in columns:
-                value = row.get(column)
-                row[column] = json.dumps(value) if value is not None else None
-            row["amount_published"] = int(row.get("amount_published", False))
-            row["is_recurring"] = int(row.get("is_recurring", False))
-            row["created_at"] = now
-            row["updated_at"] = now
-            if not row.get("deadline"):
-                row["deadline"] = None
-            connection.execute(
-                """INSERT INTO opportunities (
-                id,name,provider,provider_type,description,levels,institution_types,
-                institution_name,counties,constituencies,eligibility_notes,need_flags,
-                gender_restriction,amount_published,amount_min,amount_max,amount_note,
-                deadline,window_note,is_recurring,status,documents_required,how_to_apply,
-                apply_url,source_url,source_type,last_verified_at,verified_by,created_at,updated_at
-                ) VALUES (
-                :id,:name,:provider,:provider_type,:description,:levels,:institution_types,
-                :institution_name,:counties,:constituencies,:eligibility_notes,:need_flags,
-                :gender_restriction,:amount_published,:amount_min,:amount_max,:amount_note,
-                :deadline,:window_note,:is_recurring,:status,:documents_required,:how_to_apply,
-                :apply_url,:source_url,:source_type,:last_verified_at,:verified_by,:created_at,:updated_at
-                ) ON CONFLICT(id) DO NOTHING""",
-                row,
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS app_migrations (
+                id TEXT PRIMARY KEY, applied_at TEXT NOT NULL
             )
-
-
+        """)
+        migration_id = "remove-bundled-opportunity-seeds"
+        applied = connection.execute(
+            "SELECT 1 FROM app_migrations WHERE id=?", (migration_id,)
+        ).fetchone()
+        if not applied:
+            placeholders = ",".join("?" for _ in REMOVED_SEED_IDS)
+            connection.execute(
+                f"DELETE FROM opportunities WHERE id IN ({placeholders})",
+                REMOVED_SEED_IDS,
+            )
+            connection.execute(
+                "INSERT INTO app_migrations (id,applied_at) VALUES (?,?)",
+                (migration_id, datetime.now(timezone.utc).isoformat()),
+            )
 def _json_list(value):
     if value is None:
         return None
@@ -297,19 +289,3 @@ def match_opportunities(profile):
     return {"likely": likely, "check_eligibility": check_eligibility}
 
 
-def calculate_fee_gap(annual_fees, scholarship=0, loan=0, other_aid=0):
-    try:
-        fees = float(annual_fees)
-        aid = float(scholarship) + float(loan) + float(other_aid)
-    except (TypeError, ValueError):
-        raise ValueError("Enter valid numbers")
-    if fees < 0 or aid < 0:
-        raise ValueError("Amounts cannot be negative")
-    gap = max(0, fees - aid)
-    percent_covered = 100.0 if fees == 0 else min(100.0, (aid / fees) * 100)
-    surplus = max(0, aid - fees)
-    return {
-        "gap": round(gap, 2),
-        "percent_covered": round(percent_covered, 2),
-        "surplus": round(surplus, 2),
-    }

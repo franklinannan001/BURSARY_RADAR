@@ -14,6 +14,21 @@ function escapeHtml(value) {
   return node.innerHTML;
 }
 
+const opportunityCount = document.querySelector("#opportunityCount");
+if (opportunityCount) {
+  fetch("/api/opportunities")
+    .then((response) => {
+      if (!response.ok) throw new Error("Could not load opportunities");
+      return response.json();
+    })
+    .then((opportunities) => {
+      opportunityCount.textContent = String(opportunities.length);
+    })
+    .catch(() => {
+      opportunityCount.textContent = "—";
+    });
+}
+
 const profileForm = document.querySelector("#profileForm");
 if (profileForm) {
   let step = 1;
@@ -64,6 +79,9 @@ if (profileForm) {
       document.querySelector("#matchCount").textContent = `${result.likely.length + result.check_eligibility.length} opportunities`;
       renderMatchGroup("Likely matches", result.likely, list);
       renderMatchGroup("Check eligibility", result.check_eligibility, list);
+      if (!result.likely.length && !result.check_eligibility.length) {
+        list.innerHTML = '<div class="empty-state">No opportunities are currently listed. Check back after verified listings are added.</div>';
+      }
     } catch {
       list.innerHTML = '<div class="empty-state">The matching service is unavailable. Please try again.</div>';
     }
@@ -128,29 +146,6 @@ async function reportOpportunity(opportunity) {
   const note = window.prompt("Optional note", "") || "";
   await fetch("/api/reports", {method:"POST",headers:{ "Content-Type":"application/json" },body:JSON.stringify({opportunity_id:opportunity.id,reason,note})});
   alert("Report submitted.");
-}
-
-const feeForm = document.querySelector("#feeForm");
-if (feeForm) {
-  feeForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = new FormData(feeForm);
-    const response = await fetch("/api/fee-gap", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify(Object.fromEntries(data.entries())),
-    });
-    const result = await response.json();
-    if (!response.ok) { alert(result.error?.message || "Invalid amounts"); return; }
-    document.querySelector("#gapAmount").textContent =
-      `KES ${Number(result.gap).toLocaleString("en-KE")}`;
-    document.querySelector("#gapProgress").style.width =
-      `${Math.max(0, Math.min(100, result.percent_covered))}%`;
-    document.querySelector("#gapSuggestions").innerHTML =
-      (result.suggested || []).slice(0,5).map((item) =>
-        `<button type="button" class="outline-button gap-suggestion">${escapeHtml(item.name)} — ${escapeHtml(item.amount)}</button>`
-      ).join("");
-  });
 }
 
 const smsButton = document.querySelector("#smsButton");

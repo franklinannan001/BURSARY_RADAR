@@ -13,7 +13,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from bursary_model import (
     DB_PATH,
-    calculate_fee_gap,
     get_connection,
     get_opportunities,
     get_opportunity_by_id,
@@ -221,36 +220,6 @@ def public_match():
     if institution_type not in (None, "public", "private"):
         return api_error("institution_type must be public or private")
     return jsonify(match_opportunities(profile))
-
-
-@app.route("/api/fee-gap", methods=["POST"])
-@limiter.limit("30 per minute")
-def fee_gap():
-    data = request.get_json(silent=True) or {}
-    try:
-        result = calculate_fee_gap(
-            data.get("annual_fees", data.get("fees", 0)),
-            data.get("scholarship", 0),
-            data.get("loan", data.get("helb", 0)),
-            data.get("other_aid", 0),
-        )
-    except ValueError as exc:
-        return api_error(str(exc))
-    suggestions = []
-    for opportunity in get_opportunities():
-        if opportunity["status"] != "closed":
-            suggestions.append({
-                "id": opportunity["id"],
-                "name": opportunity["name"],
-                "amount": (
-                    f"KES {opportunity['amount_min']:,} - {opportunity['amount_max']:,}"
-                    if opportunity["amount_published"] and opportunity["amount_min"] is not None
-                    else "Amount not published"
-                ),
-            })
-    result["suggested"] = suggestions
-    result["note"] = "Awards are discretionary; this is a planning estimate, not a promise."
-    return jsonify(result)
 
 
 def reminder_text(opportunity, schedule_day, lang):

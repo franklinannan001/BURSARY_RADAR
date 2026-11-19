@@ -1,19 +1,8 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 from app import app
-from bursary_model import calculate_fee_gap, compute_confidence, match_opportunities
-
-
-def test_fee_gap_calculation():
-    assert calculate_fee_gap(100000, 40000, 30000, 0)["gap"] == 30000
-    assert calculate_fee_gap(50000, 40000, 30000, 0)["surplus"] == 20000
-    assert calculate_fee_gap(50000, 0, 0, 0)["gap"] == 50000
-    try:
-        calculate_fee_gap(-1)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("negative amount should fail")
+from bursary_model import compute_confidence, match_opportunities
 
 
 def test_confidence_green_14_day_boundary():
@@ -39,19 +28,40 @@ def test_confidence_red_amber_and_unknown():
                                "deadline": None, "status": "unknown"})["confidence"] == "RED"
 
 
-def test_matching_public_private_county_constituency():
+def test_matching_public_private_county_constituency(monkeypatch):
+    opportunities = [
+        {
+            "id": "test-public-fund", "name": "Public fund", "deadline": None,
+            "levels": ["university"], "institution_types": ["public"],
+            "institution_name": None, "counties": None, "constituencies": None,
+            "need_flags": None, "gender_restriction": None,
+        },
+        {
+            "id": "test-loan", "name": "Student loan", "deadline": None,
+            "levels": ["university"], "institution_types": ["public", "private"],
+            "institution_name": None, "counties": None, "constituencies": None,
+            "need_flags": None, "gender_restriction": None,
+        },
+        {
+            "id": "test-mwala-fund", "name": "Mwala fund", "deadline": None,
+            "levels": ["university"], "institution_types": None,
+            "institution_name": None, "counties": ["Machakos"],
+            "constituencies": ["Mwala"], "need_flags": None,
+            "gender_restriction": None,
+        },
+    ]
+    monkeypatch.setattr("bursary_model.get_opportunities", lambda filters=None: opportunities)
     public_match = match_opportunities({
         "level": "university",
         "institution_type": "public",
-        "institution_name": "Machakos University",
         "county": "Machakos",
         "constituency": "Mwala",
         "need_flags": [],
     })
     likely_names = {m["opportunity"]["name"] for m in public_match["likely"]}
-    assert "HELB student loan" in likely_names
-    assert "Government university scholarship (Higher Education Financing)" in likely_names
-    assert "Machakos University internal bursary" in likely_names
+    check_names = {m["opportunity"]["name"] for m in public_match["check_eligibility"]}
+    assert likely_names == {"Public fund", "Student loan"}
+    assert check_names == {"Mwala fund"}
 
     private_match = match_opportunities({
         "level": "university",
@@ -61,11 +71,22 @@ def test_matching_public_private_county_constituency():
         "need_flags": [],
     })
     private_names = {m["opportunity"]["name"] for m in private_match["likely"]}
-    assert "HELB student loan" in private_names
-    assert "Government university scholarship (Higher Education Financing)" not in private_names
+    private_check = {m["opportunity"]["name"] for m in private_match["check_eligibility"]}
+    assert private_names == {"Student loan"}
+    assert private_check == {"Mwala fund"}
 
 
-def test_null_restrictions_go_to_check_eligibility():
+def test_null_restrictions_go_to_check_eligibility(monkeypatch):
+    unknown_opportunity = {
+        "id": "test-unknown", "name": "Unknown eligibility", "deadline": None,
+        "levels": None, "institution_types": None, "institution_name": None,
+        "counties": None, "constituencies": None, "need_flags": None,
+        "gender_restriction": None,
+    }
+    monkeypatch.setattr(
+        "bursary_model.get_opportunities",
+        lambda filters=None: [unknown_opportunity],
+    )
     result = match_opportunities({
         "level": "university",
         "institution_type": "public",
@@ -74,24 +95,12 @@ def test_null_restrictions_go_to_check_eligibility():
         "need_flags": [],
     })
     check = {m["opportunity"]["id"] for m in result["check_eligibility"]}
-    assert "machakos-county-bursary" in check or len(check) == 0
+    assert check == {"test-unknown"}
 
 
-def test_fee_gap_api_never_sums_unpublished_amounts():
+def test_fee_gap_feature_removed():
     client = app.test_client()
-    response = client.post("/api/fee-gap", json={
-        "annual_fees": 100000,
-        "scholarship": 40000,
-        "loan": 30000,
-        "other_aid": 0,
-    })
-    assert response.status_code == 200
-    body = response.get_json()
-    assert body["gap"] == 30000
-    assert body["percent_covered"] == 70
-    assert "Awards are discretionary" in body["note"]
-    assert all("Amount not published" in str(item["amount"]) or
-               item["amount"].startswith("KES") for item in body["suggested"])
+    assert client.post("/api/fee-gap", json={}).status_code == 404
 
 
 def test_reminder_schedule_and_skip_past():
@@ -100,20 +109,37 @@ def test_reminder_schedule_and_skip_past():
     from bursary_model import get_connection
     with get_connection() as connection:
         connection.execute(
-            "UPDATE opportunities SET deadline=? WHERE id='machakos-county-bursary'",
-            (future,),
+            """INSERT OR REPLACE INTO opportunities
+            (id,name,provider,provider_type,source_url,source_type,deadline,status,documents_required)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+            ("test-reminder-future", "Test reminder", "Test provider", "other",
+             "https://example.test", "official", future, "open", json.dumps(["Admission letter"])),
         )
-    response = client.post("/api/reminders/preview", json={
-        "opportunity_ids": ["machakos-county-bursary", "uoem-tvet-mpesa-scholarship"],
-        "lang": "en",
-    })
-    assert response.status_code == 200
-    body = response.get_json()
-    assert body["reminders"]
-    schedule = body["reminders"][0]["schedule"]
-    assert [item["days_before"] for item in schedule] == [14, 7, 2]
-    assert all(len(item["message"]) <= 160 for item in schedule)
-    assert any(item["reason"] == "Deadline has passed" for item in body["skipped"])
+        connection.execute(
+            """INSERT OR REPLACE INTO opportunities
+            (id,name,provider,provider_type,source_url,source_type,deadline,status,documents_required)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+            ("test-reminder-past", "Past reminder", "Test provider", "other",
+             "https://example.test", "official", "2020-01-01", "closed", None),
+        )
+    try:
+        response = client.post("/api/reminders/preview", json={
+            "opportunity_ids": ["test-reminder-future", "test-reminder-past"],
+            "lang": "en",
+        })
+        assert response.status_code == 200
+        body = response.get_json()
+        assert body["reminders"]
+        schedule = body["reminders"][0]["schedule"]
+        assert [item["days_before"] for item in schedule] == [14, 7, 2]
+        assert all(len(item["message"]) <= 160 for item in schedule)
+        assert any(item["reason"] == "Deadline has passed" for item in body["skipped"])
+    finally:
+        with get_connection() as connection:
+            connection.execute(
+                "DELETE FROM opportunities WHERE id IN (?,?)",
+                ("test-reminder-future", "test-reminder-past"),
+            )
 
 
 def test_admin_auth_disabled_or_rejected():
@@ -154,10 +180,16 @@ def test_notice_reader_mock_and_injection_is_data():
     assert body["extracted"]["deadline"] is None
 
 
-def test_public_pages_and_seed_count():
+def test_public_pages_and_removed_seed_entries():
     client = app.test_client()
     assert client.get("/").status_code == 302
     assert client.get("/login").status_code == 200
     assert client.get("/signup").status_code == 200
     assert client.get("/healthz").status_code == 200
-    assert len(client.get("/api/opportunities").get_json()) >= 7
+    bundled_ids = {
+        "hef-government-scholarship", "helb-loan", "machakos-county-bursary",
+        "machakos-university-internal-bursary", "ngcdf-mwala-bursary",
+        "ngcdf-matungulu-bursary", "uoem-tvet-mpesa-scholarship",
+    }
+    returned_ids = {item["id"] for item in client.get("/api/opportunities").get_json()}
+    assert not bundled_ids.intersection(returned_ids)
