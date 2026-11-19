@@ -3,6 +3,49 @@ const feeForm = document.querySelector("#feeForm");
 const matchesList = document.querySelector("#matchesList");
 const matchTemplate = document.querySelector("#matchTemplate");
 
+function getSavedPlan() {
+  try {
+    return JSON.parse(localStorage.getItem("bursary-radar-plan") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveToPlan(match, button) {
+  const plan = getSavedPlan();
+  const alreadySaved = plan.some((item) => item.name === match.name);
+
+  if (!alreadySaved) {
+    plan.push({
+      name: match.name,
+      provider: match.provider,
+      deadline: match.deadline,
+      amount: match.amount,
+    });
+    localStorage.setItem("bursary-radar-plan", JSON.stringify(plan));
+  }
+
+  button.classList.remove("button-success");
+  void button.offsetWidth;
+  button.classList.add(alreadySaved ? "button-added" : "button-success");
+  button.textContent = alreadySaved ? "Already in plan" : "Added to plan";
+  button.setAttribute("aria-live", "polite");
+
+  const reminderCard = document.querySelector(".reminder-card");
+  reminderCard.classList.remove("notice-pulse");
+  void reminderCard.offsetWidth;
+  reminderCard.classList.add("notice-pulse");
+  document.querySelector("#smsText").textContent =
+    alreadySaved
+      ? `${match.name} is already saved in My Plan.`
+      : `${match.name} was added to My Plan.`;
+
+  window.setTimeout(() => {
+    button.classList.remove("button-success", "button-added");
+    button.textContent = "Add to plan";
+  }, 2400);
+}
+
 function formDataAsObject(form) {
   const data = new FormData(form);
   return Object.fromEntries(data.entries());
@@ -42,6 +85,10 @@ profileForm.addEventListener("submit", async (event) => {
       `Deadline: ${match.deadline}`;
     node.querySelector(".amount").textContent = match.amount;
     node.querySelector(".source-link").href = match.source_url;
+
+    node.querySelector(".plan-button").addEventListener("click", (event) => {
+      saveToPlan(match, event.currentTarget);
+    });
 
     node.querySelector(".remind-button").addEventListener("click", async () => {
       const smsResponse = await fetch("/api/simulate-sms", {
@@ -95,3 +142,15 @@ if (smsButton) {
     document.querySelector("#smsText").textContent = result.message;
   });
 }
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest(
+    "button.primary-button, button.secondary-button, button.outline-button, button.auth-primary, button.auth-secondary"
+  );
+  if (!button || button.classList.contains("plan-button")) return;
+
+  button.classList.remove("clicked");
+  void button.offsetWidth;
+  button.classList.add("clicked");
+  window.setTimeout(() => button.classList.remove("clicked"), 420);
+});
