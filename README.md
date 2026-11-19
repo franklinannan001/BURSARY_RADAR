@@ -1,95 +1,105 @@
 # Bursary Radar
 
-Every bursary you qualify for. Every deadline. Before it closes.
+Bursary Radar is a mobile-first, low-data funding discovery tool for Kenyan students.
 
-This is a hackathon MVP built with Python and Flask. It provides:
+> Bursary Radar is an independent student project. It is not affiliated with HELB, the Universities Fund, NG-CDF, county governments or any funder. Always confirm details at the official source. Never pay money to apply for a bursary.
 
-- a two-minute student profile and rule-based opportunity matching;
-- a fee-gap calculator;
-- deadline confidence and source metadata;
-- document checklists;
-- a simulated SMS reminder preview;
-- a human-reviewed notice-reader demo.
+## Screens
 
-> Demo data is illustrative and must be reverified against official sources before launch.
-> Bursary Radar is independent and is not affiliated with HELB, the Government of Kenya,
-> county governments or NG-CDF offices.
+Screenshots can be placed here:
+
+- Landing and sample profile
+- Five-step profile wizard
+- Matched opportunity cards
+- Fee-Gap Planner
+- My Plan and SMS preview
+- `/poll` and `/admin`
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Student[Student browser] --> Flask[Flask/Jinja frontend]
+  Flask --> API["Public /api endpoints"]
+  API --> SQLite[(SQLite / data seed)]
+  Admin[Human reviewer] -->|X-Admin-Token| API
+  API --> Draft[Notice Reader draft]
+  Draft -->|Approval| SQLite
+```
+
+The existing Flask/Jinja frontend is preserved. Public matching is stateless and student profiles are not stored. My Plan is stored only in `localStorage`.
 
 ## Run locally
 
-1. Install Python 3.11 or newer.
-2. Open a terminal in this project folder.
-3. Create and activate an environment:
-
-   ```powershell
-   py -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   python -m pip install -r requirements.txt
-   ```
-
-4. Initialize and start the app:
-
-   ```powershell
-   python app.py
-   ```
-
-5. Open `http://127.0.0.1:5000`.
-
-The first visit opens the student login page. Create an account with the **Create an
-account** link; account details are stored locally in `bursary_radar.db`. Set a strong
-`SECRET_KEY` environment variable before deploying the app.
-
-### Open from another device
-
-The app listens on all network interfaces by default. Start it with:
-
 ```powershell
+cd C:\Users\ADMIN\python_projects\BURSARY_RADAR
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+copy .env.example .env
 python app.py
 ```
 
-Find the host computer's IPv4 address with `ipconfig`, then open
-`http://<host-ipv4-address>:5000` on another device connected to the same network.
-For example: `http://192.168.1.25:5000`.
+Open `http://127.0.0.1:5000`.
 
-Allow Python/Flask through Windows Defender Firewall for private networks if Windows
-prompts. Internet users who are not on the same network require hosting with port
-forwarding or a cloud tunnel/deployment service.
+## Environment
 
-## Project structure
+- `ADMIN_TOKEN`: enables admin routes; unset disables them
+- `DATABASE_URL`: reserved for a future SQLAlchemy/PostgreSQL backend
+- `CORS_ORIGINS`: comma-separated allowed browser origins
+- `LLM_PROVIDER=mock`: deterministic offline Notice Reader
+- `LLM_API_KEY`: provider key; not required by mock mode
+- `ENABLE_SMS=false`, `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID`: SMS placeholders
+- `APP_ENV`, `SECRET_KEY`, `HOST`, `PORT`, `FLASK_DEBUG`
 
-```text
-app.py                 Flask routes and demo endpoints
-bursary_model.py       SQLite setup and matching/fee-gap logic
-templates/index.html   Main application UI
-static/styles.css      Responsive interface
-static/app.js          Profile, planner and UI interactions
-tests/test_app.py      Focused Flask and matching tests
+## API overview
+
+- `GET /healthz`
+- `GET /api/opportunities`
+- `GET /api/opportunities/{id}`
+- `POST /api/match`
+- `POST /api/fee-gap`
+- `POST /api/reminders/preview`
+- `POST /api/reports`
+- `POST /api/feedback`
+- `POST /api/events`
+- `GET|POST /api/poll`
+- `/api/admin/*`: protected by `X-Admin-Token`
+
+Open `/api` is not used by Flask; no Swagger UI is enabled. Admin routes use the header-based contract.
+
+## Tests
+
+```powershell
+python -m pytest -q
 ```
 
-## Data integration
+The tests cover confidence, public/private matching, county and constituency restrictions, fee gaps, reminder schedules, privacy-safe public pages and admin authentication.
 
-Opportunities are seeded into `bursary_radar.db` on the first run. Replace
-`SEED_OPPORTUNITIES` in `bursary_model.py` with verified office data before a pilot.
-Each record should include:
+## Deploy on Render
 
-- name and provider;
-- level and institution type;
-- county and optional constituency;
-- need criteria;
-- amount;
-- deadline;
-- source URL and last-verified date;
-- confidence;
-- required documents.
+1. Push the project to a Git repository.
+2. Create a Python Web Service from the repository.
+3. Render will read `render.yaml`.
+4. Set `ADMIN_TOKEN`, `SECRET_KEY`, `CORS_ORIGINS` and `APP_ENV=production`.
+5. Use `gunicorn app:app --bind 0.0.0.0:$PORT` as the start command.
 
-## SMS integration
+## SQLite and redeployment
 
-The current reminder panel is a demo. To enable live SMS:
+Render's default disk is ephemeral. SQLite edits and verification dates may disappear on redeploy.
+Export reviewed data with `GET /api/admin/export` and commit it to `data/opportunities.seed.json`, or configure a persistent PostgreSQL database.
 
-1. Create an Africa's Talking account and obtain a sandbox/API key.
-2. Add `AFRICAS_TALKING_USERNAME` and `AFRICAS_TALKING_API_KEY` environment variables.
-3. Implement `send_sms()` in `app.py` using the Africa's Talking SDK.
-4. Schedule deadline checks (14, 7 and 2 days) through a cron job or cloud task.
-5. Store only the phone number and reminder consent needed for delivery.
+## Seed and verification
 
-No phone number or uploaded document is stored by this demo.
+The database starts with exactly seven entries from `data/opportunities.seed.json`. It does not add or invent opportunities.
+Unknown values remain null and are presented as “Not confirmed” or “Amount not published”.
+
+See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) and [ROADMAP.md](docs/ROADMAP.md).
+
+## Limitations
+
+- Award amounts and application windows may change.
+- The database is local unless migrated to a hosted database.
+- SMS delivery is a preview only; no phone number is collected.
+- Mock Notice Reader output requires human review and is not an extraction engine.
+- No student profile is written to disk.
