@@ -3,8 +3,10 @@ import json
 import os
 import re
 import sqlite3
+import uuid
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from urllib.parse import urlparse
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_limiter import Limiter
@@ -41,7 +43,8 @@ def init_users_db():
                 gender TEXT,
                 date_of_birth TEXT,
                 course TEXT,
-                study_level TEXT
+                study_level TEXT,
+                role TEXT NOT NULL DEFAULT 'student'
             )
         """)
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
@@ -49,6 +52,10 @@ def init_users_db():
             connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
         if "study_level" not in columns:
             connection.execute("ALTER TABLE users ADD COLUMN study_level TEXT")
+        if "role" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"
+            )
 
 
 init_users_db()
@@ -61,9 +68,30 @@ def current_user():
     with sqlite3.connect(USERS_DB) as connection:
         connection.row_factory = sqlite3.Row
         return connection.execute(
-            "SELECT id, full_name, enrollment_no, email, course, study_level FROM users WHERE id=?",
+            "SELECT id, full_name, enrollment_no, email, course, study_level, role FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
+
+
+def email_domain(email):
+    local, separator, domain = email.rpartition("@")
+    if not separator or not local or not domain or not re.fullmatch(
+        r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+", local
+    ):
+        return None
+    domain = domain.rstrip(".").lower()
+    labels = domain.split(".")
+    if len(labels) < 2 or any(
+        not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in labels
+    ):
+        return None
+    return domain
+
+
+def is_go_ke_email(email):
+    domain = email_domain(email)
+    return domain == "go.ke" or (domain is not None and domain.endswith(".go.ke"))
 
 
 def login_required(view):
@@ -108,11 +136,29 @@ def api_error(message, status=400):
 def admin_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not ADMIN_TOKEN:
-            return api_error("Admin routes are disabled", 503)
+        user = current_user()
+        if user and user["role"] == "admin":
+            return view(*args, **kwargs)
         supplied = request.headers.get("X-Admin-Token", "")
-        if not hmac.compare_digest(supplied, ADMIN_TOKEN):
+        if ADMIN_TOKEN and hmac.compare_digest(supplied, ADMIN_TOKEN):
+            return view(*args, **kwargs)
+        if user:
+            return api_error("Admin access required", 403)
+        if not ADMIN_TOKEN:
+            return api_error("Admin authentication required", 401)
+        else:
             return api_error("Invalid or missing admin token", 401)
+    return wrapped
+
+
+def admin_session_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = current_user()
+        if not user:
+            return api_error("Authentication required", 401)
+        if user["role"] != "admin":
+            return api_error("Admin access required", 403)
         return view(*args, **kwargs)
     return wrapped
 
@@ -120,44 +166,71 @@ def admin_required(view):
 @app.route("/")
 @login_required
 def index():
-    if current_user():
-        return redirect(url_for("dashboard"))
-    return redirect(url_for("login"))
+    user = current_user()
+    return redirect(url_for("admin_page" if user["role"] == "admin" else "dashboard"))
 
 
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    if current_user()["role"] == "admin":
+        return redirect(url_for("admin_page"))
     return render_template("index.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user():
-        return redirect(url_for("dashboard"))
+        user = current_user()
+        return redirect(url_for("admin_page" if user["role"] == "admin" else "dashboard"))
     error = None
+    account_type = "student"
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
-        with sqlite3.connect(USERS_DB) as connection:
-            connection.row_factory = sqlite3.Row
-            user = connection.execute(
-                "SELECT * FROM users WHERE email=?", (email,)
-            ).fetchone()
-        if user and check_password_hash(user["password_hash"], password):
-            session.clear()
-            session["user_id"] = user["id"]
-            return redirect(url_for("dashboard"))
-        error = "Invalid email or password."
-    return render_template("auth.html", mode="login", error=error)
+        account_type = request.form.get("account_type", "student")
+        if account_type not in ("student", "admin"):
+            error = "Select Student or Admin."
+        else:
+            with sqlite3.connect(USERS_DB) as connection:
+                connection.row_factory = sqlite3.Row
+                user = connection.execute(
+                    "SELECT * FROM users WHERE email=?", (email,)
+                ).fetchone()
+                if user and check_password_hash(user["password_hash"], password):
+                    stored_role = user["role"] or "student"
+                    if account_type == "admin" and not is_go_ke_email(user["email"]):
+                        error = "Admin access requires an email address ending in .go.ke."
+                    else:
+                        if account_type == "admin" and stored_role == "student":
+                            connection.execute(
+                                "UPDATE users SET role='admin' WHERE id=?", (user["id"],)
+                            )
+                            stored_role = "admin"
+                        if account_type != stored_role:
+                            error = "This account is registered as a different account type."
+                        else:
+                            session.clear()
+                            session["user_id"] = user["id"]
+                            return redirect(
+                                url_for("admin_page" if stored_role == "admin" else "dashboard")
+                            )
+        if error is None:
+            error = "Invalid email or password."
+    return render_template(
+        "auth.html", mode="login", error=error, account_type=account_type
+    )
 
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if current_user():
-        return redirect(url_for("dashboard"))
+        user = current_user()
+        return redirect(url_for("admin_page" if user["role"] == "admin" else "dashboard"))
     error = None
+    account_type = "student"
     if request.method == "POST":
+        account_type = request.form.get("account_type", "student")
         full_name = request.form.get("full_name", "").strip()
         enrollment_no = request.form.get("enrollment_no", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -178,36 +251,47 @@ def signup():
             "Education", "Nursing", "Medicine", "Law", "Business Administration",
             "Accounting", "Agriculture", "Other",
         }
-        if not all((full_name, email, password)):
+        if account_type not in ("student", "admin"):
+            error = "Select Student or Admin."
+        elif not all((full_name, email, password)):
             error = "Name, email and password are required."
+        elif email_domain(email) is None:
+            error = "Enter a valid email address."
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
-        elif study_level not in (*valid_levels.keys(), "Tertiary"):
+        elif account_type == "admin" and not is_go_ke_email(email):
+            error = "Admin accounts require an email address ending in .go.ke."
+        elif account_type == "student" and study_level not in (*valid_levels.keys(), "Tertiary"):
             error = "Select a valid level of study."
-        elif study_level in valid_levels and course not in {
+        elif account_type == "student" and study_level in valid_levels and course not in {
             f"Grade {grade}" for grade in valid_levels[study_level]
         }:
             error = "Select a grade that belongs to the selected level."
-        elif study_level == "Tertiary" and course == "Other" and not custom_course:
+        elif account_type == "student" and study_level == "Tertiary" and course == "Other" and not custom_course:
             error = "Enter your course name."
-        elif study_level == "Tertiary" and course not in tertiary_courses:
+        elif account_type == "student" and study_level == "Tertiary" and course not in tertiary_courses:
             error = "Select a course or choose Other."
         else:
-            if study_level == "Tertiary" and course == "Other":
+            if account_type == "student" and study_level == "Tertiary" and course == "Other":
                 course = custom_course
+            if account_type == "admin":
+                study_level = None
+                course = None
             try:
                 with sqlite3.connect(USERS_DB) as connection:
                     connection.execute(
                         """INSERT INTO users
-                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course,study_level)
-                        VALUES (?,?,?,?,?,?,?,?)""",
+                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course,study_level,role)
+                        VALUES (?,?,?,?,?,?,?,?,?)""",
                         (full_name, enrollment_no, email, generate_password_hash(password),
-                         gender, date_of_birth, course, study_level),
+                         gender, date_of_birth, course, study_level, account_type),
                     )
                 return redirect(url_for("login"))
             except sqlite3.IntegrityError:
                 error = "An account with that email already exists."
-    return render_template("auth.html", mode="signup", error=error)
+    return render_template(
+        "auth.html", mode="signup", error=error, account_type=account_type
+    )
 
 
 @app.route("/logout", methods=["POST"])
@@ -447,6 +531,7 @@ def admin_opportunities():
             "institution_types", "institution_name", "counties", "constituencies",
             "eligibility_notes", "need_flags", "gender_restriction",
             "amount_published", "amount_min", "amount_max", "amount_note", "deadline",
+            "number_of_bursaries", "disbursement_start", "disbursement_end",
             "window_note", "is_recurring", "status", "documents_required", "how_to_apply",
             "apply_url", "source_url", "source_type", "last_verified_at", "verified_by",
         ]
@@ -466,6 +551,223 @@ def admin_opportunities():
         values["updated_at"] = datetime.now(timezone.utc).isoformat()
         connection.execute(sql, values)
     return jsonify(get_opportunity_by_id(data["id"])), 201
+
+
+@app.route("/api/admin/bursaries", methods=["POST"])
+@admin_session_required
+@limiter.limit("30 per minute")
+def upload_bursary():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return api_error("A JSON object is required")
+
+    text_fields = (
+        "name", "provider", "provider_type", "eligibility_notes",
+        "amount_note", "how_to_apply", "source_url", "status",
+        "disbursement_start", "disbursement_end",
+    )
+    for field in text_fields:
+        if not isinstance(data.get(field), str) or not data[field].strip():
+            return api_error(f"{field} is required")
+    text_limits = {
+        "name": 200,
+        "provider": 200,
+        "provider_type": 40,
+        "eligibility_notes": 4000,
+        "amount_note": 1000,
+        "how_to_apply": 4000,
+        "source_url": 2048,
+        "status": 20,
+        "disbursement_start": 10,
+        "disbursement_end": 10,
+    }
+    if any(len(data[field].strip()) > limit for field, limit in text_limits.items()):
+        return api_error("One or more text fields exceed their maximum length")
+
+    allowed_provider_types = {
+        "national_government", "county_government", "university",
+        "tvet", "ngo", "foundation", "other",
+    }
+    if not isinstance(data["provider_type"], str) or data["provider_type"] not in allowed_provider_types:
+        return api_error("Select a valid provider type")
+
+    levels = data.get("levels")
+    allowed_levels = {"primary", "secondary", "tvet", "university"}
+    if not isinstance(levels, list) or not levels or any(
+        not isinstance(level, str) or level not in allowed_levels for level in levels
+    ):
+        return api_error("Select at least one valid level")
+
+    def valid_string_list(field, allowed=None):
+        values = data.get(field, [])
+        if not isinstance(values, list) or any(
+            not isinstance(value, str) or not value.strip() for value in values
+        ):
+            return None
+        normalized = list(dict.fromkeys(value.strip() for value in values))
+        if allowed is not None and any(value not in allowed for value in normalized):
+            return None
+        return normalized
+
+    institution_types = valid_string_list("institution_types", {"public", "private"})
+    need_flags = valid_string_list(
+        "need_flags", {"orphan", "disability", "low_income", "single_parent"}
+    )
+    if institution_types is None or need_flags is None:
+        return api_error("Invalid institution types or need indicators")
+
+    counties = valid_string_list("counties")
+    constituencies = valid_string_list("constituencies")
+    if counties is None or constituencies is None:
+        return api_error("County and constituency values must be lists")
+    with open(
+        os.path.join(os.path.dirname(__file__), "static", "kenya_locations.json"),
+        encoding="utf-8",
+    ) as locations_file:
+        county_map = json.load(locations_file)["counties"]
+    if any(county not in county_map for county in counties):
+        return api_error("Select valid counties")
+    valid_constituencies = {
+        constituency
+        for county in counties
+        for constituency in county_map[county]
+    }
+    if constituencies and not counties:
+        return api_error("Select a county before selecting constituencies")
+    if any(constituency not in valid_constituencies for constituency in constituencies):
+        return api_error("Constituencies must belong to the selected counties")
+
+    number_of_bursaries = data.get("number_of_bursaries")
+    if (
+        isinstance(number_of_bursaries, bool)
+        or not isinstance(number_of_bursaries, int)
+        or number_of_bursaries < 1
+    ):
+        return api_error("number_of_bursaries must be a positive whole number")
+
+    try:
+        disbursement_start = datetime.strptime(data["disbursement_start"], "%Y-%m-%d").date()
+        disbursement_end = datetime.strptime(data["disbursement_end"], "%Y-%m-%d").date()
+    except ValueError:
+        return api_error("Disbursement dates must use YYYY-MM-DD")
+    if disbursement_end < disbursement_start:
+        return api_error("Disbursement end date must not be before its start date")
+
+    deadline = data.get("deadline") or None
+    if deadline is not None and not isinstance(deadline, str):
+        return api_error("deadline must use YYYY-MM-DD")
+    if deadline:
+        try:
+            datetime.strptime(deadline, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            return api_error("deadline must use YYYY-MM-DD")
+    window_value = data.get("window_note", "")
+    if not isinstance(window_value, str):
+        return api_error("window_note must be text")
+    window_note = window_value.strip()
+    if len(window_note) > 500:
+        return api_error("window_note must not exceed 500 characters")
+    if not deadline and not window_note:
+        return api_error("Provide a deadline or an application window note")
+
+    if not isinstance(data["status"], str) or data["status"] not in {
+        "open", "upcoming", "closed", "unknown"
+    }:
+        return api_error("Select a valid status")
+    for boolean_field in ("amount_published", "is_recurring"):
+        if not isinstance(data.get(boolean_field), bool):
+            return api_error(f"{boolean_field} must be true or false")
+
+    def amount_value(field):
+        value = data.get(field)
+        if value in (None, ""):
+            return None, True
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None, False
+        return value, True
+
+    amount_min, valid_min = amount_value("amount_min")
+    amount_max, valid_max = amount_value("amount_max")
+    if not valid_min or not valid_max:
+        return api_error("Amounts must be non-negative whole numbers")
+    if amount_min is not None and amount_max is not None and amount_min > amount_max:
+        return api_error("Minimum amount must not exceed maximum amount")
+    if not data["amount_published"] and (amount_min is not None or amount_max is not None):
+        return api_error("Do not enter amounts when the amount is unpublished")
+
+    documents_required = valid_string_list("documents_required")
+    if documents_required is None or not documents_required:
+        return api_error("List required documents, or enter 'None stated'")
+    if any(len(document) > 500 for document in documents_required):
+        return api_error("Document names must not exceed 500 characters")
+
+    source_url = data["source_url"].strip()
+    apply_url_value = data.get("apply_url")
+    if apply_url_value is not None and not isinstance(apply_url_value, str):
+        return api_error("apply_url must be a URL")
+    apply_url = apply_url_value.strip() or None if apply_url_value is not None else None
+    for field, url in (("source_url", source_url), ("apply_url", apply_url)):
+        if url:
+            parsed = urlparse(url)
+            if (
+                parsed.scheme not in ("http", "https")
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
+                return api_error(f"{field} must be an HTTP or HTTPS URL")
+
+    gender_restriction = data.get("gender_restriction") or None
+    if gender_restriction not in (None, "Male", "Female"):
+        return api_error("Select a valid gender restriction")
+    optional_text_fields = {
+        "institution_name": 200,
+        "description": 4000,
+    }
+    optional_text = {}
+    for field, maximum_length in optional_text_fields.items():
+        value = data.get(field)
+        if value is not None and not isinstance(value, str):
+            return api_error(f"{field} must be text")
+        value = value.strip() if value is not None else ""
+        if len(value) > maximum_length:
+            return api_error(f"{field} must not exceed {maximum_length} characters")
+        optional_text[field] = value or None
+    institution_name = optional_text["institution_name"]
+    description = optional_text["description"]
+    amount_note = data["amount_note"].strip()
+    id = f"official-{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc).isoformat()
+    verified_by = current_user()["email"]
+    columns = (
+        "id", "name", "provider", "provider_type", "description", "levels",
+        "institution_types", "institution_name", "counties", "constituencies",
+        "eligibility_notes", "need_flags", "gender_restriction", "amount_published",
+        "amount_min", "amount_max", "amount_note", "number_of_bursaries",
+        "disbursement_start", "disbursement_end", "deadline", "window_note",
+        "is_recurring", "status", "documents_required", "how_to_apply", "apply_url",
+        "source_url", "source_type", "last_verified_at", "verified_by",
+        "created_at", "updated_at",
+    )
+    values = (
+        id, data["name"].strip(), data["provider"].strip(), data["provider_type"],
+        description, json.dumps(levels), json.dumps(institution_types),
+        institution_name, json.dumps(counties), json.dumps(constituencies),
+        data["eligibility_notes"].strip(), json.dumps(need_flags),
+        gender_restriction, int(data["amount_published"]), amount_min, amount_max,
+        amount_note, number_of_bursaries, disbursement_start.isoformat(),
+        disbursement_end.isoformat(), deadline, window_note,
+        int(data["is_recurring"]), data["status"], json.dumps(documents_required),
+        data["how_to_apply"].strip(), apply_url, source_url, "official", now,
+        verified_by, now, now,
+    )
+    placeholders = ",".join("?" for _ in columns)
+    with get_connection() as connection:
+        connection.execute(
+            f"INSERT INTO opportunities ({','.join(columns)}) VALUES ({placeholders})",
+            values,
+        )
+    return jsonify(get_opportunity_by_id(id)), 201
 
 
 @app.route("/api/admin/opportunities/<opportunity_id>", methods=["PUT", "PATCH", "DELETE"])
@@ -498,7 +800,8 @@ def verify_opportunity(opportunity_id):
     if not get_opportunity_by_id(opportunity_id):
         return api_error("Opportunity not found", 404)
     data = request.get_json(silent=True) or {}
-    verified_by = str(data.get("verified_by", ""))
+    user = current_user()
+    verified_by = user["email"] if user else str(data.get("verified_by", ""))
     with get_connection() as connection:
         connection.execute(
             "UPDATE opportunities SET last_verified_at=?,verified_by=?,updated_at=? WHERE id=?",
@@ -654,8 +957,12 @@ def poll_page():
 
 
 @app.route("/admin")
+@login_required
 def admin_page():
-    return render_template("index.html", admin_only=True)
+    user = current_user()
+    if user["role"] != "admin":
+        return redirect(url_for("dashboard"))
+    return render_template("admin.html", user=user)
 
 
 if __name__ == "__main__":

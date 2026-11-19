@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin dashboard | Bursary Radar</title>
+  <meta name="description" content="Manage verified bursary opportunities.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('admin_page') }}" aria-label="Bursary Radar admin home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3 1.5 8.2 12 13.4l8.6-4.3v6.1h2V8.2L12 3Zm-5 8.7v4.8c0 1.7 2.2 3.5 5 3.5s5-1.8 5-3.5v-4.8L12 14l-5-2.3Z"/></svg>
+      </span>
+      <span>Bursary <strong>Radar</strong></span>
+    </a>
+    <div class="admin-account">
+      <span>{{ user["full_name"] }} · Government official</span>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="logout-button" type="submit">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="admin-page">
+    <p class="eyebrow">OFFICIAL BURSARY MANAGEMENT</p>
+    <h1>Admin dashboard</h1>
+    <p>Submit complete bursary information from an official source. Records are added to the opportunity directory after validation.</p>
+
+    <section class="admin-panel">
+      <h2>Upload a bursary</h2>
+      <p class="admin-hint">Required fields are marked in the form. Select at least one study level. Enter a deadline or an application-window note.</p>
+      <div id="adminStatus" class="admin-status" role="status" aria-live="polite"></div>
+      <form id="bursaryForm" class="admin-form">
+        <div class="admin-form-grid">
+          <label>Bursary name<input name="name" maxlength="200" required></label>
+          <label>Funding provider<input name="provider" maxlength="200" required></label>
+          <label>Provider type
+            <select name="provider_type" required>
+              <option value="">Select provider type</option>
+              <option value="national_government">National government</option>
+              <option value="county_government">County government</option>
+              <option value="university">University</option>
+              <option value="tvet">TVET institution</option>
+              <option value="ngo">NGO</option>
+              <option value="foundation">Foundation</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Number of bursaries<input name="number_of_bursaries" type="number" min="1" step="1" required></label>
+          <label>Disbursement starts<input name="disbursement_start" type="date" required></label>
+          <label>Disbursement ends<input name="disbursement_end" type="date" required></label>
+          <label>Application deadline<input name="deadline" type="date"></label>
+          <label>Application window note<input name="window_note" maxlength="500" placeholder="Required if there is no fixed deadline"></label>
+          <label>Status
+            <select name="status" required>
+              <option value="open">Open</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="closed">Closed</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </label>
+          <label class="admin-checkbox"><input name="is_recurring" type="checkbox"> Recurs each year</label>
+          <label class="admin-checkbox"><input name="amount_published" type="checkbox"> Award amount is published</label>
+          <label>Minimum award amount (KES)<input name="amount_min" type="number" min="0" step="1"></label>
+          <label>Maximum award amount (KES)<input name="amount_max" type="number" min="0" step="1"></label>
+          <label class="admin-span-all">Amount details or provider note<input name="amount_note" maxlength="1000" required placeholder="For example, amount per student or 'Not disclosed by provider'"></label>
+          <label>Institution name, if restricted<input name="institution_name" maxlength="200"></label>
+          <label>Gender restriction
+            <select name="gender_restriction">
+              <option value="">None / not specified</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </label>
+          <label>Application link (optional)<input name="apply_url" type="url" placeholder="https://"></label>
+          <label class="admin-span-all">Official source URL<input name="source_url" type="url" placeholder="https://" required></label>
+          <label class="admin-span-all">Short description<textarea name="description" rows="3" maxlength="4000"></textarea></label>
+          <label class="admin-span-all">Eligibility details<textarea name="eligibility_notes" rows="4" maxlength="4000" required></textarea></label>
+          <label class="admin-span-all">How to apply<textarea name="how_to_apply" rows="4" maxlength="4000" required></textarea></label>
+          <label class="admin-span-all">Required documents (one per line; enter “None stated” if none)<textarea name="documents_required" rows="3" required></textarea></label>
+        </div>
+
+        <fieldset class="admin-fieldset">
+          <legend>Eligible study levels — select at least one</legend>
+          <div class="admin-check-grid">
+            <label><input type="checkbox" name="levels" value="primary"> Primary</label>
+            <label><input type="checkbox" name="levels" value="secondary"> Junior / Senior Secondary</label>
+            <label><input type="checkbox" name="levels" value="tvet"> TVET</label>
+            <label><input type="checkbox" name="levels" value="university"> University</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="admin-fieldset">
+          <legend>Institution types, if restricted</legend>
+          <div class="admin-check-grid">
+            <label><input type="checkbox" name="institution_types" value="public"> Public</label>
+            <label><input type="checkbox" name="institution_types" value="private"> Private</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="admin-fieldset">
+          <legend>Counties, if restricted</legend>
+          <p class="admin-hint">Leave empty if students from any county may apply. Use Ctrl or Command to select multiple counties.</p>
+          <select id="bursaryCounties" multiple size="7" aria-label="Eligible counties"></select>
+        </fieldset>
+
+        <fieldset class="admin-fieldset">
+          <legend>Constituencies, if restricted</legend>
+          <p class="admin-hint">Select counties first. Leave empty if all constituencies in the selected counties are eligible.</p>
+          <select id="bursaryConstituencies" multiple size="7" aria-label="Eligible constituencies" disabled></select>
+        </fieldset>
+
+        <fieldset class="admin-fieldset">
+          <legend>Need indicators, if restricted</legend>
+          <div class="admin-check-grid">
+            <label><input type="checkbox" name="need_flags" value="orphan"> Orphan</label>
+            <label><input type="checkbox" name="need_flags" value="disability"> Disability</label>
+            <label><input type="checkbox" name="need_flags" value="low_income"> Low income</label>
+            <label><input type="checkbox" name="need_flags" value="single_parent"> Single-parent household</label>
+          </div>
+        </fieldset>
+
+        <button id="submitBursary" class="primary-button" type="submit">Save bursary</button>
+      </form>
+    </section>
+
+    <section class="admin-panel">
+      <div class="section-heading">
+        <div><h2>Bursaries in the directory</h2></div>
+        <button id="refreshBursaries" class="secondary-button" type="button">Refresh list</button>
+      </div>
+      <div id="bursaryList" class="admin-bursary-list" aria-live="polite"></div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+</html>

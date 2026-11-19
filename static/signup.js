@@ -4,6 +4,8 @@ const courseSelect = document.querySelector("#courseSelect");
 const customCourseField = document.querySelector("#customCourseField");
 const customCourse = document.querySelector("#customCourse");
 const registrationForm = document.querySelector(".registration-form");
+const accountType = document.querySelector("#accountType");
+const studentDetails = document.querySelector("#studentDetails");
 
 const gradeRanges = {
   Primary: [1, 6],
@@ -72,8 +74,25 @@ courseSelect.addEventListener("change", () => {
   if (isOther) customCourse.focus();
 });
 
+function setAccountType() {
+  const isStudent = accountType.value === "student";
+  studentDetails.hidden = !isStudent;
+  studentDetails.querySelectorAll("input, select").forEach((field) => {
+    field.disabled = !isStudent;
+  });
+  levelSelect.required = isStudent;
+  courseSelect.required = isStudent;
+  if (isStudent) {
+    setCourseOptions(levelSelect.value);
+  } else {
+    customCourseField.hidden = true;
+    customCourse.required = false;
+  }
+}
+
+accountType.addEventListener("change", setAccountType);
 registrationForm.addEventListener("reset", () => {
-  window.setTimeout(() => setCourseOptions(levelSelect.value), 0);
+  window.setTimeout(setAccountType, 0);
 });
 
-setCourseOptions(levelSelect.value);
+setAccountType();

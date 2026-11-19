@@ -80,6 +80,8 @@ const translations = {
     "opportunity.deadline_unknown": "Deadline not confirmed",
     "opportunity.amount_published": "Amount published",
     "opportunity.amount_unknown": "Amount not published",
+    "opportunity.number_bursaries": "{count} bursaries",
+    "opportunity.disbursement": "Disbursement: {start} to {end}",
     "opportunity.documents": "Documents and how to apply",
     "opportunity.documents_unknown": "Document checklist not confirmed",
     "opportunity.source_instructions": "Check the source for current instructions.",
@@ -210,6 +212,8 @@ const translations = {
     "opportunity.deadline_unknown": "Tarehe ya mwisho haijathibitishwa",
     "opportunity.amount_published": "Kiasi kimetangazwa",
     "opportunity.amount_unknown": "Kiasi hakijatangazwa",
+    "opportunity.number_bursaries": "Nafasi za ufadhili: {count}",
+    "opportunity.disbursement": "Kipindi cha malipo: {start} hadi {end}",
     "opportunity.documents": "Nyaraka na jinsi ya kutuma ombi",
     "opportunity.documents_unknown": "Orodha ya nyaraka haijathibitishwa",
     "opportunity.source_instructions": "Angalia chanzo ili kupata maelekezo ya sasa.",
@@ -541,10 +545,22 @@ function renderMatchGroup(title, matches, container) {
   container.appendChild(heading);
   matches.forEach((match) => {
     const opportunity = match.opportunity;
+    const additionalDetails = [];
+    if (Number.isInteger(opportunity.number_of_bursaries)) {
+      additionalDetails.push(t("opportunity.number_bursaries", {
+        count: opportunity.number_of_bursaries,
+      }));
+    }
+    if (opportunity.disbursement_start && opportunity.disbursement_end) {
+      additionalDetails.push(t("opportunity.disbursement", {
+        start: opportunity.disbursement_start,
+        end: opportunity.disbursement_end,
+      }));
+    }
     const card = document.createElement("article");
     card.className = "match-card";
     card.innerHTML =
-      `<div class="match-main"><div class="badge-row"><span class="provider-chip">${escapeHtml(opportunity.provider_type.replaceAll("_"," "))}</span><span class="confidence ${opportunity.confidence.toLowerCase()}">${escapeHtml(opportunity.confidence)}</span></div><h3>${escapeHtml(opportunity.name)}</h3><p>${escapeHtml(opportunity.provider)}</p><div class="meta"><span>${escapeHtml(opportunity.deadline || t("opportunity.deadline_unknown"))}</span><span>${escapeHtml(opportunity.amount_published ? t("opportunity.amount_published") : t("opportunity.amount_unknown"))}</span></div><p class="match-reasons">${(match.reasons || []).map((reason) => escapeHtml(translateMatchReason(reason))).join(" • ")}</p><details><summary>${t("opportunity.documents")}</summary><p>${escapeHtml(opportunity.documents_required ? opportunity.documents_required.join(", ") : t("opportunity.documents_unknown"))}</p><p>${escapeHtml(opportunity.how_to_apply || t("opportunity.source_instructions"))}</p></details></div>
+      `<div class="match-main"><div class="badge-row"><span class="provider-chip">${escapeHtml(opportunity.provider_type.replaceAll("_"," "))}</span><span class="confidence ${opportunity.confidence.toLowerCase()}">${escapeHtml(opportunity.confidence)}</span></div><h3>${escapeHtml(opportunity.name)}</h3><p>${escapeHtml(opportunity.provider)}</p><div class="meta"><span>${escapeHtml(opportunity.deadline || t("opportunity.deadline_unknown"))}</span><span>${escapeHtml(opportunity.amount_note || (opportunity.amount_published ? t("opportunity.amount_published") : t("opportunity.amount_unknown")))}</span>${additionalDetails.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("")}</div><p class="match-reasons">${(match.reasons || []).map((reason) => escapeHtml(translateMatchReason(reason))).join(" • ")}</p><details><summary>${t("opportunity.documents")}</summary><p>${escapeHtml(opportunity.documents_required ? opportunity.documents_required.join(", ") : t("opportunity.documents_unknown"))}</p><p>${escapeHtml(opportunity.how_to_apply || t("opportunity.source_instructions"))}</p></details></div>
        <div class="match-actions"><button class="outline-button plan-button" type="button">${t("opportunity.add")}</button><a class="source-link" href="${escapeHtml(opportunity.apply_url || opportunity.source_url)}" target="_blank" rel="noopener noreferrer">${t("opportunity.source")}</a><button class="outline-button report-button" type="button">${t("opportunity.report")}</button></div>`;
     card.querySelector(".plan-button").addEventListener("click", (event) => addToPlan(opportunity, event.currentTarget));
     card.querySelector(".report-button").addEventListener("click", () => reportOpportunity(opportunity));

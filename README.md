@@ -21,7 +21,8 @@ flowchart LR
   Student[Student browser] --> Flask[Flask/Jinja frontend]
   Flask --> API["Public /api endpoints"]
   API --> SQLite[(SQLite / admin-managed listings)]
-  Admin[Human reviewer] -->|X-Admin-Token| API
+  Admin[Government official] -->|Account role and login session| Flask
+  Admin -->|Optional X-Admin-Token| API
   API --> Draft[Notice Reader draft]
   Draft -->|Approval| SQLite
 ```
@@ -43,7 +44,7 @@ Open `http://127.0.0.1:5000`.
 
 ## Environment
 
-- `ADMIN_TOKEN`: enables admin routes; unset disables them
+- `ADMIN_TOKEN`: optional token for direct admin API clients; web admins sign in with an admin account
 - `DATABASE_URL`: reserved for a future SQLAlchemy/PostgreSQL backend
 - `CORS_ORIGINS`: comma-separated allowed browser origins
 - `LLM_PROVIDER=mock`: deterministic offline Notice Reader
@@ -62,7 +63,10 @@ Open `http://127.0.0.1:5000`.
 - `POST /api/feedback`
 - `POST /api/events`
 - `GET|POST /api/poll`
-- `/api/admin/*`: protected by `X-Admin-Token`
+- `POST /api/admin/bursaries`: creates a validated bursary using an authenticated admin session
+- `/api/admin/*`: admin APIs accept an admin login session or, where supported, `X-Admin-Token`; the bursary upload endpoint requires the session
+
+Admin accounts are selected during signup and login and require an email ending in `.go.ke`. This checks the address domain only; it does not verify control of the mailbox or government employment. The admin dashboard is at `/admin`.
 
 Open `/api` is not used by Flask; no Swagger UI is enabled. Admin routes use the header-based contract.
 
@@ -72,14 +76,14 @@ Open `/api` is not used by Flask; no Swagger UI is enabled. Admin routes use the
 python -m pytest -q
 ```
 
-The tests cover confidence, public/private matching, county and constituency restrictions, reminder schedules, removed features, privacy-safe public pages and admin authentication.
+The tests cover confidence, public/private matching, county and constituency restrictions, reminder schedules, removed features, role-based admin access, bursary validation and admin authentication.
 
 ## Deploy on Render
 
 1. Push the project to a Git repository.
 2. Create a Python Web Service from the repository.
 3. Render will read `render.yaml`.
-4. Set `ADMIN_TOKEN`, `SECRET_KEY`, `CORS_ORIGINS` and `APP_ENV=production`.
+4. Set `SECRET_KEY`, `CORS_ORIGINS` and `APP_ENV=production`. Set `ADMIN_TOKEN` only if direct API-token access is required.
 5. Use `gunicorn app:app --bind 0.0.0.0:$PORT` as the start command.
 
 ## SQLite and redeployment
@@ -89,7 +93,7 @@ Export reviewed data with `GET /api/admin/export` as a backup, or configure a pe
 
 ## Seed and verification
 
-The database starts without opportunity listings. Add reviewed entries through the admin API; no sample or seed opportunities are bundled. Unknown values remain null and are presented as “Not confirmed” or “Amount not published”.
+The database starts without opportunity listings. Government officials can sign in at `/admin` and submit bursaries with their official source, eligibility, number of awards, application window, disbursement dates and application details. No sample or seed opportunities are bundled.
 
 See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) and [ROADMAP.md](docs/ROADMAP.md).
 

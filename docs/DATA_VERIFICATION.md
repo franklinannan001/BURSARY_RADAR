@@ -1,10 +1,12 @@
 # Data verification checklist
 
-1. Open the opportunity source and confirm the provider is named.
-2. Confirm the level, institution type, county and constituency restrictions.
-3. Record the deadline exactly, or leave it null and describe the known window.
-4. Confirm whether a per-student amount is published. Never infer or sum it.
-5. Record the documents and application method shown by the official source.
-6. Open `/admin`, enter the admin token, and select **Mark verified**.
-7. Enter a verifier name or team name. The application records the verification date.
-8. Repeat after 14 days or whenever the source, deadline or application link changes.
+1. Confirm the official source identifies the funding provider and the bursary.
+2. Record eligible study levels and any institution, county, constituency, gender or need restrictions.
+3. Record the number of bursaries and the exact disbursement start and end dates.
+4. Record the deadline, or provide an application-window note if there is no fixed deadline.
+5. Confirm whether an amount is published; enter the provider's stated amount or note that it is not disclosed. Never infer or sum an amount.
+6. Record the required documents and application instructions shown by the official source.
+7. Sign up as a government official with a `.go.ke` email, then select **Admin** when logging in. Open `/admin` and submit the verified details.
+8. The system records the admin email and verification time on submission. Recheck after 14 days or when source details change.
+
+The `.go.ke` check is domain-based only. It does not independently verify mailbox ownership or a person's government employment.

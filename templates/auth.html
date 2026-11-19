@@ -22,9 +22,17 @@
         <div class="cap"><span></span></div>
         <div class="certificate">BR</div>
       </div>
-      <h1>Student Login</h1>
+      <h1>Log in</h1>
       <form class="auth-form" method="post" action="{{ url_for('login') }}">
         {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+        <label>
+          <span>Sign in as</span>
+          <select name="account_type" required>
+            <option value="student" {{ 'selected' if account_type != 'admin' else '' }}>Student</option>
+            <option value="admin" {{ 'selected' if account_type == 'admin' else '' }}>Government official (Admin)</option>
+          </select>
+        </label>
+        <p class="auth-hint">Admin accounts require an email address ending in .go.ke.</p>
         <label>
           <span class="sr-only">Edu Email ID</span>
           <input type="email" name="email" placeholder="Edu Email ID" autocomplete="email" required>
@@ -45,32 +53,42 @@
       </div>
       <form class="auth-form registration-form" method="post" action="{{ url_for('signup') }}">
         {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+        <label>
+          <strong>Account type:</strong>
+          <select id="accountType" name="account_type" required>
+            <option value="student" {{ 'selected' if account_type != 'admin' else '' }}>Student</option>
+            <option value="admin" {{ 'selected' if account_type == 'admin' else '' }}>Government official (Admin)</option>
+          </select>
+        </label>
+        <p class="auth-hint">Admin accounts require an email address ending in .go.ke.</p>
         <div class="registration-grid">
-          <label class="field-row"><span class="field-icon" aria-hidden="true">●</span><span><strong>Student Name:</strong><input type="text" name="full_name" placeholder="Enter your full name" autocomplete="name" required></span></label>
+          <label class="field-row"><span class="field-icon" aria-hidden="true">●</span><span><strong>Full Name:</strong><input type="text" name="full_name" placeholder="Enter your full name" autocomplete="name" required></span></label>
           <label class="field-row"><span class="field-icon" aria-hidden="true">▣</span><span><strong>Enrollment No:</strong><input type="text" name="enrollment_no" placeholder="Enter your Enrollment No." autocomplete="off"></span></label>
           <label class="field-row"><span class="field-icon" aria-hidden="true">✉</span><span><strong>Email:</strong><input type="email" name="email" placeholder="Enter your email" autocomplete="email" required></span></label>
           <label class="field-row"><span class="field-icon" aria-hidden="true">♙</span><span><strong>Password:</strong><input type="password" name="password" placeholder="Create a password" autocomplete="new-password" minlength="6" required></span></label>
         </div>
-        <div class="registration-grid compact">
-          <fieldset class="gender-field">
-            <legend>Gender:</legend>
-            <label><input type="radio" name="gender" value="Male"> Male</label>
-            <label><input type="radio" name="gender" value="Female"> Female</label>
-            <label><input type="radio" name="gender" value="Other"> Other</label>
-          </fieldset>
-          <label class="date-field"><strong>Student date of birth:</strong><input type="date" name="date_of_birth"></label>
+        <div id="studentDetails">
+          <div class="registration-grid compact">
+            <fieldset class="gender-field">
+              <legend>Gender:</legend>
+              <label><input type="radio" name="gender" value="Male"> Male</label>
+              <label><input type="radio" name="gender" value="Female"> Female</label>
+              <label><input type="radio" name="gender" value="Other"> Other</label>
+            </fieldset>
+            <label class="date-field"><strong>Student date of birth:</strong><input type="date" name="date_of_birth"></label>
+          </div>
+          <label class="level-field"><strong>Level of study:</strong><select id="studyLevel" name="study_level" required>
+            <option value="">Select your level</option>
+            <option value="Primary">Primary</option>
+            <option value="Junior Secondary">Junior Secondary</option>
+            <option value="Senior Secondary">Senior Secondary</option>
+            <option value="Tertiary">Tertiary level</option>
+          </select></label>
+          <label class="course-field"><strong id="courseLabel">Grade or course:</strong><select id="courseSelect" name="course" required disabled>
+            <option value="">Select your level first</option>
+          </select></label>
+          <label id="customCourseField" class="custom-course-field" hidden><strong>Your course name:</strong><input id="customCourse" name="custom_course" type="text" placeholder="Enter your course name" maxlength="120"></label>
         </div>
-        <label class="level-field"><strong>Level of study:</strong><select id="studyLevel" name="study_level" required>
-          <option value="">Select your level</option>
-          <option value="Primary">Primary</option>
-          <option value="Junior Secondary">Junior Secondary</option>
-          <option value="Senior Secondary">Senior Secondary</option>
-          <option value="Tertiary">Tertiary level</option>
-        </select></label>
-        <label class="course-field"><strong id="courseLabel">Grade or course:</strong><select id="courseSelect" name="course" required disabled>
-          <option value="">Select your level first</option>
-        </select></label>
-        <label id="customCourseField" class="custom-course-field" hidden><strong>Your course name:</strong><input id="customCourse" name="custom_course" type="text" placeholder="Enter your course name" maxlength="120"></label>
         <div class="auth-actions">
           <button class="auth-primary register-button" type="submit">Register</button>
           <button class="auth-secondary" type="reset">Reset</button>

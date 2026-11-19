@@ -188,6 +188,7 @@ def test_public_pages_and_removed_seed_entries():
     assert client.get("/").status_code == 302
     assert client.get("/login").status_code == 200
     assert client.get("/signup").status_code == 200
+    assert client.get("/admin").headers["Location"].endswith("/login")
     assert client.get("/healthz").status_code == 200
     bundled_ids = {
         "hef-government-scholarship", "helb-loan", "machakos-county-bursary",
@@ -249,6 +250,186 @@ def test_signup_study_level_and_grade_or_course():
     finally:
         with sqlite3.connect(DB_PATH) as connection:
             connection.executemany("DELETE FROM users WHERE email=?", [(email,) for email in emails])
+
+
+def test_admin_accounts_require_go_ke_and_role_is_checked_on_login():
+    client = app.test_client()
+    student_client = app.test_client()
+    suffix = uuid.uuid4().hex
+    valid_email = f"official-{suffix}@county.go.ke"
+    invalid_email = f"official-{suffix}@fakego.ke"
+    student_email = f"student-{suffix}@example.com"
+    legacy_official_email = f"legacy-official-{suffix}@agency.go.ke"
+    try:
+        invalid = client.post("/signup", data={
+            "account_type": "admin",
+            "full_name": "Official Test",
+            "email": invalid_email,
+            "password": "secure123",
+        })
+        assert invalid.status_code == 200
+        assert b"ending in .go.ke" in invalid.data
+
+        created = client.post("/signup", data={
+            "account_type": "admin",
+            "full_name": "Official Test",
+            "email": valid_email,
+            "password": "secure123",
+        })
+        assert created.status_code == 302
+        with sqlite3.connect(DB_PATH) as connection:
+            row = connection.execute(
+                "SELECT role,study_level,course FROM users WHERE email=?",
+                (valid_email,),
+            ).fetchone()
+        assert row == ("admin", None, None)
+
+        wrong_role = client.post("/login", data={
+            "account_type": "student",
+            "email": valid_email,
+            "password": "secure123",
+        })
+        assert wrong_role.status_code == 200
+        assert b"different account type" in wrong_role.data
+
+        login = client.post("/login", data={
+            "account_type": "admin",
+            "email": valid_email,
+            "password": "secure123",
+        })
+        assert login.status_code == 302
+        assert login.headers["Location"].endswith("/admin")
+        assert client.get("/admin").status_code == 200
+
+        student_signup = student_client.post("/signup", data={
+            "account_type": "student",
+            "full_name": "Student Test",
+            "email": student_email,
+            "password": "secure123",
+            "study_level": "Primary",
+            "course": "Grade 1",
+        })
+        assert student_signup.status_code == 302
+        student_login = student_client.post("/login", data={
+            "account_type": "student",
+            "email": student_email,
+            "password": "secure123",
+        })
+        assert student_login.status_code == 302
+        assert student_client.get("/admin").headers["Location"].endswith("/dashboard")
+        assert student_client.get("/api/admin/opportunities").status_code == 403
+        assert student_client.post("/api/admin/bursaries", json={}).status_code == 403
+
+        legacy_client = app.test_client()
+        legacy_signup = legacy_client.post("/signup", data={
+            "account_type": "student",
+            "full_name": "Legacy Official",
+            "email": legacy_official_email,
+            "password": "secure123",
+            "study_level": "Primary",
+            "course": "Grade 1",
+        })
+        assert legacy_signup.status_code == 302
+        upgraded = legacy_client.post("/login", data={
+            "account_type": "admin",
+            "email": legacy_official_email,
+            "password": "secure123",
+        })
+        assert upgraded.status_code == 302
+        assert upgraded.headers["Location"].endswith("/admin")
+        with sqlite3.connect(DB_PATH) as connection:
+            upgraded_role = connection.execute(
+                "SELECT role FROM users WHERE email=?",
+                (legacy_official_email,),
+            ).fetchone()[0]
+        assert upgraded_role == "admin"
+    finally:
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute(
+                "DELETE FROM users WHERE email IN (?,?,?,?)",
+                (valid_email, invalid_email, student_email, legacy_official_email),
+            )
+
+
+def test_admin_bursary_upload_validates_and_stores_required_details():
+    client = app.test_client()
+    suffix = uuid.uuid4().hex
+    email = f"official-{suffix}@education.go.ke"
+    opportunity_id = None
+    try:
+        signup = client.post("/signup", data={
+            "account_type": "admin",
+            "full_name": "Official Test",
+            "email": email,
+            "password": "secure123",
+        })
+        assert signup.status_code == 302
+        login = client.post("/login", data={
+            "account_type": "admin",
+            "email": email,
+            "password": "secure123",
+        })
+        assert login.status_code == 302
+
+        start = datetime.now(timezone.utc).date() + timedelta(days=60)
+        end = start + timedelta(days=180)
+        payload = {
+            "name": "Machakos Student Bursary",
+            "provider": "Machakos County Government",
+            "provider_type": "county_government",
+            "description": "Annual bursary for eligible learners.",
+            "levels": ["primary", "secondary"],
+            "institution_types": ["public"],
+            "institution_name": "",
+            "counties": ["Machakos"],
+            "constituencies": ["Mwala"],
+            "eligibility_notes": "Applicants must be residents of Machakos County.",
+            "need_flags": ["low_income"],
+            "gender_restriction": None,
+            "amount_published": True,
+            "amount_min": 10000,
+            "amount_max": 20000,
+            "amount_note": "KES 10,000 to KES 20,000 per learner.",
+            "number_of_bursaries": 20,
+            "disbursement_start": start.isoformat(),
+            "disbursement_end": end.isoformat(),
+            "deadline": (start - timedelta(days=10)).isoformat(),
+            "window_note": "",
+            "is_recurring": True,
+            "status": "open",
+            "documents_required": ["National ID", "Admission letter"],
+            "how_to_apply": "Submit the completed form to the ward office.",
+            "apply_url": "https://machakos.go.ke/apply",
+            "source_url": "https://machakos.go.ke/bursaries",
+        }
+
+        invalid = client.post(
+            "/api/admin/bursaries",
+            json={**payload, "number_of_bursaries": 0},
+        )
+        assert invalid.status_code == 400
+
+        uploaded = client.post("/api/admin/bursaries", json=payload)
+        assert uploaded.status_code == 201
+        bursary = uploaded.get_json()
+        opportunity_id = bursary["id"]
+        assert bursary["number_of_bursaries"] == 20
+        assert bursary["disbursement_start"] == start.isoformat()
+        assert bursary["disbursement_end"] == end.isoformat()
+        assert bursary["verified_by"] == email
+        reverification = client.post(
+            f"/api/admin/opportunities/{opportunity_id}/verify",
+            json={},
+        )
+        assert reverification.status_code == 200
+        assert reverification.get_json()["verified_by"] == email
+        listed = client.get("/api/admin/opportunities").get_json()
+        assert any(item["id"] == opportunity_id for item in listed)
+    finally:
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute("DELETE FROM users WHERE email=?", (email,))
+            if opportunity_id:
+                connection.execute("DELETE FROM opportunities WHERE id=?", (opportunity_id,))
 
 
 def test_dashboard_profile_levels_years_and_counties():
