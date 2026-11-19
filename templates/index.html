@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bursary Radar</title>
+  <meta name="description" content="Find funding, plan your fee gap and track deadlines.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Bursary Radar home">
+      <span class="brand-mark">BR</span>
+      <span>Bursary <strong>Radar</strong></span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#matches">Find funding</a>
+      <a href="#fee-gap">Fee-gap planner</a>
+      <button id="languageToggle" class="text-button" type="button">Swahili</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <span class="eyebrow">MACHAKOS UNIVERSITY HACKFEST 2026</span>
+        <h1>Every bursary you qualify for.<br><span>Before it closes.</span></h1>
+        <p>Create a short profile to find relevant funding, understand your fee gap and prepare before deadlines.</p>
+      </div>
+      <div class="hero-card" aria-label="Demo summary">
+        <strong>20+</strong>
+        <span>opportunity sources</span>
+      </div>
+    </section>
+
+    <div class="warning-banner">
+      <strong>Safety first:</strong> Never pay to apply for a bursary.
+      <span>All listings are demo data and must be verified officially.</span>
+    </div>
+
+    <section class="workspace">
+      <aside class="profile-panel">
+        <div class="step-title"><span>1</span><div><small>YOUR PROFILE</small><h2>What are you studying?</h2></div></div>
+        <form id="profileForm">
+          <label>Level of study
+            <select name="level" required>
+              <option>University</option>
+              <option>TVET</option>
+            </select>
+          </label>
+          <label>Institution type
+            <select name="institution_type" required>
+              <option>Public</option>
+              <option>Private</option>
+            </select>
+          </label>
+          <label>Home county
+            <select name="county">
+              <option>Machakos</option>
+              <option>All</option>
+            </select>
+          </label>
+          <label>Constituency
+            <select name="constituency">
+              <option>Machakos Town</option>
+              <option>Masinga</option>
+              <option>Yatta</option>
+              <option>Kangundo</option>
+              <option>Matungulu</option>
+              <option>Kathiani</option>
+              <option>Mavoko</option>
+              <option>Mwala</option>
+              <option>Athi River</option>
+              <option>Kalama</option>
+            </select>
+          </label>
+          <div class="check-grid">
+            <label><input type="checkbox" name="need_flag"> Low-income household</label>
+            <label><input type="checkbox" name="disability"> Living with disability</label>
+          </div>
+          <label class="consent"><input type="checkbox" required> I consent to using this information to find matches.</label>
+          <button class="primary-button" type="submit">Find my matches</button>
+        </form>
+      </aside>
+
+      <div class="content">
+        <section id="matches" class="matches-section">
+          <div class="section-heading">
+            <div><small>PERSONALISED RESULTS</small><h2>Your funding matches</h2></div>
+            <span id="matchCount" class="count-pill">0 matches</span>
+          </div>
+          <div id="matchesList" class="matches-list">
+            <div class="empty-state">Complete your profile to see opportunities.</div>
+          </div>
+        </section>
+
+        <section id="fee-gap" class="planner">
+          <div class="step-title"><span>2</span><div><small>FEE-GAP PLANNER</small><h2>What is still unpaid?</h2></div></div>
+          <form id="feeForm" class="fee-form">
+            <label>Annual fees (KES)<input name="fees" type="number" min="0" value="100000"></label>
+            <label>Government scholarship (KES)<input name="scholarship" type="number" min="0" value="40000"></label>
+            <label>HELB loan (KES)<input name="helb" type="number" min="0" value="30000"></label>
+            <button class="secondary-button" type="submit">Calculate gap</button>
+          </form>
+          <div class="gap-result">
+            <span>Remaining fee gap</span>
+            <strong id="gapAmount">KES 30,000</strong>
+          </div>
+        </section>
+
+        <section class="reminder-card">
+          <div>
+            <small>DEADLINE REMINDER</small>
+            <h2>SMS preview</h2>
+            <p id="smsText">Apply early and keep a checklist of required documents.</p>
+          </div>
+          <button id="smsButton" class="secondary-button" type="button">Preview reminder</button>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <template id="matchTemplate">
+    <article class="match-card">
+      <div class="match-main">
+        <span class="confidence"></span>
+        <h3></h3>
+        <p class="provider"></p>
+        <div class="meta">
+          <span class="deadline"></span>
+          <span class="amount"></span>
+        </div>
+      </div>
+      <div class="match-actions">
+        <button class="outline-button remind-button" type="button">SMS preview</button>
+        <a class="source-link" target="_blank" rel="noopener noreferrer">View source</a>
+      </div>
+    </article>
+  </template>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
