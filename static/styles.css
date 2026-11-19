@@ -430,6 +430,7 @@ summary:focus-visible {
 .field-row > span:last-child { display: grid; gap: 5px; }
 .field-icon { align-self: center; color: var(--blue); font-size: 20px; text-align: center; }
 .registration-form input, .registration-form select { height: 48px; padding: 0 12px; border-radius: 7px; font-size: 14px; }
+.custom-course-field[hidden] { display: none !important; }
 .gender-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .gender-field legend, .date-field strong, .course-field strong { display: block; margin-bottom: 7px; font-size: 13px; }
 .gender-field label { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; font-size: 13px; font-weight: 500; }

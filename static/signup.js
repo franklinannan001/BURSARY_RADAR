@@ -48,7 +48,10 @@ function setCourseOptions(level) {
   if (level === "Tertiary") {
     courseLabel.textContent = "Course:";
     courseSelect.add(new Option("Select a course", ""));
-    tertiaryCourses.forEach((course) => courseSelect.add(new Option(course, course)));
+    tertiaryCourses.forEach((course) => {
+      const label = course === "Other" ? "Other (enter your course)" : course;
+      courseSelect.add(new Option(label, course));
+    });
     courseSelect.disabled = false;
     return;
   }

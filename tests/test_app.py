@@ -2,6 +2,7 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from app import app
 from bursary_model import DB_PATH, compute_confidence, match_opportunities
@@ -202,6 +203,9 @@ def test_signup_study_level_and_grade_or_course():
     signup_page = client.get("/signup")
     assert b'name="study_level"' in signup_page.data
     assert b'id="courseSelect"' in signup_page.data
+    assert b'id="customCourseField"' in signup_page.data
+    styles = Path(__file__).resolve().parents[1] / "static" / "styles.css"
+    assert ".custom-course-field[hidden]" in styles.read_text(encoding="utf-8")
     assert b'static/signup.js' in signup_page.data
 
     suffix = uuid.uuid4().hex
