@@ -21,6 +21,11 @@
       <a href="#verify" data-i18n="nav.verify">How we verify</a>
     </nav>
     <button id="languageToggle" class="logout-button" type="button" aria-label="Switch to Kiswahili">Kiswahili</button>
+    {% if not poll_only and not admin_only %}
+    <form method="post" action="{{ url_for('logout') }}">
+      <button class="logout-button" type="submit">Log out</button>
+    </form>
+    {% endif %}
   </header>
 
   <main>
