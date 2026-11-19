@@ -242,8 +242,32 @@ def opportunity_detail(opportunity_id):
 def public_match():
     profile = request.get_json(silent=True) or {}
     level = profile.get("level")
-    if level not in ("secondary", "tvet", "university"):
-        return api_error("level must be secondary, tvet or university")
+    year_ranges = {
+        "Primary": range(1, 7),
+        "Junior Secondary": range(1, 4),
+        "Senior Secondary": range(1, 4),
+        "Tertiary": range(1, 6),
+        "secondary": range(1, 9),
+        "tvet": range(1, 9),
+        "university": range(1, 9),
+    }
+    if not isinstance(level, str) or level not in year_ranges:
+        return api_error("Select a valid level of study")
+    if not str(profile.get("institution_name", "")).strip():
+        return api_error("institution_name is required")
+    year_value = profile.get("year_of_study")
+    try:
+        if isinstance(year_value, bool):
+            raise ValueError
+        year = int(year_value)
+    except (TypeError, ValueError):
+        return api_error("year_of_study is required and must be a whole number")
+    if year not in year_ranges[level]:
+        return api_error("year_of_study is outside the selected level's range")
+    if not str(profile.get("county", "")).strip():
+        return api_error("county is required")
+    if not str(profile.get("constituency", "")).strip():
+        return api_error("constituency is required")
     institution_type = profile.get("institution_type")
     if institution_type not in (None, "public", "private"):
         return api_error("institution_type must be public or private")

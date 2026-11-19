@@ -223,13 +223,27 @@ def match_opportunities(profile):
     constituency = profile.get("constituency")
     need_flags = set(profile.get("need_flags") or [])
     gender = profile.get("gender")
+    level_aliases = {
+        "Primary": {"primary"},
+        "Junior Secondary": {"secondary"},
+        "Senior Secondary": {"secondary"},
+        "Tertiary": {"university", "tvet", "tertiary"},
+        "primary": {"primary"},
+        "secondary": {"secondary"},
+        "university": {"university"},
+        "tvet": {"tvet"},
+    }
+    profile_levels = level_aliases.get(level, {level})
+
+    def contains_case_insensitive(values, value):
+        return any(item.casefold() == value.casefold() for item in values)
 
     for opportunity in get_opportunities():
         reasons = []
         unknown = False
         levels = opportunity["levels"]
         if levels is not None:
-            if level not in levels:
+            if not profile_levels.intersection(levels):
                 continue
             reasons.append("Matched because: level is included")
         else:
@@ -237,9 +251,12 @@ def match_opportunities(profile):
 
         types = opportunity["institution_types"]
         if types is not None:
-            if institution_type not in types:
+            if institution_type is None:
+                unknown = True
+            elif institution_type not in types:
                 continue
-            reasons.append("Matched because: institution type is included")
+            else:
+                reasons.append("Matched because: institution type is included")
         else:
             unknown = True
 
@@ -251,13 +268,13 @@ def match_opportunities(profile):
 
         counties = opportunity["counties"]
         if counties is not None:
-            if county not in counties:
+            if not county or not contains_case_insensitive(counties, county):
                 continue
             reasons.append("Matched because: county matches")
 
         constituencies = opportunity["constituencies"]
         if constituencies is not None:
-            if not constituency or constituency not in constituencies:
+            if not constituency or not contains_case_insensitive(constituencies, constituency):
                 continue
             reasons.append("Matched because: constituency matches")
 

@@ -249,3 +249,43 @@ def test_signup_study_level_and_grade_or_course():
     finally:
         with sqlite3.connect(DB_PATH) as connection:
             connection.executemany("DELETE FROM users WHERE email=?", [(email,) for email in emails])
+
+
+def test_dashboard_profile_levels_years_and_counties():
+    locations_path = Path(__file__).resolve().parents[1] / "static" / "kenya_locations.json"
+    locations = json.loads(locations_path.read_text(encoding="utf-8"))["counties"]
+    assert len(locations) == 47
+    assert sum(len(constituencies) for constituencies in locations.values()) == 290
+    assert locations["Machakos"] == [
+        "Kangundo", "Kathiani", "Machakos Town", "Masinga",
+        "Matungulu", "Mavoko", "Mwala", "Yatta",
+    ]
+
+    client = app.test_client()
+    profile = {
+        "institution_name": "Test School",
+        "year_of_study": 1,
+        "county": "Machakos",
+        "constituency": "Mwala",
+        "institution_type": "public",
+        "need_flags": [],
+    }
+    for level in ("Primary", "Junior Secondary", "Senior Secondary", "Tertiary"):
+        response = client.post("/api/match", json={**profile, "level": level})
+        assert response.status_code == 200
+    for level, invalid_year in (
+        ("Primary", 7),
+        ("Junior Secondary", 4),
+        ("Senior Secondary", 4),
+        ("Tertiary", 6),
+    ):
+        response = client.post(
+            "/api/match",
+            json={**profile, "level": level, "year_of_study": invalid_year},
+        )
+        assert response.status_code == 400
+    missing_name = client.post(
+        "/api/match",
+        json={**profile, "level": "Tertiary", "institution_name": ""},
+    )
+    assert missing_name.status_code == 400

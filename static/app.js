@@ -33,6 +33,75 @@ const profileForm = document.querySelector("#profileForm");
 if (profileForm) {
   let step = 1;
   const titles = ["Level of study", "Year of study", "Location", "Optional need indicators", "Review"];
+  const studyLevel = document.querySelector("#studyLevelDashboard");
+  const studyYear = document.querySelector("#studyYear");
+  const countySelect = document.querySelector("#profileCounty");
+  const constituencySelect = document.querySelector("#profileConstituency");
+  let locations = null;
+
+  function setStudyYearOptions(level) {
+    const ranges = {
+      Primary: [1, 6],
+      "Junior Secondary": [1, 3],
+      "Senior Secondary": [1, 3],
+      Tertiary: [1, 5],
+    };
+    studyYear.replaceChildren();
+    const range = ranges[level];
+    if (!range) {
+      studyYear.add(new Option("Select your level first", ""));
+      studyYear.disabled = true;
+      return;
+    }
+    studyYear.add(new Option("Select a year", ""));
+    for (let year = range[0]; year <= range[1]; year += 1) {
+      studyYear.add(new Option(`Year ${year}`, String(year)));
+    }
+    studyYear.disabled = false;
+  }
+
+  const locationsReady = fetch("/static/kenya_locations.json")
+    .then((response) => {
+      if (!response.ok) throw new Error("Could not load county list");
+      return response.json();
+    })
+    .then((data) => {
+      locations = data.counties;
+      countySelect.replaceChildren(new Option("Select a county", ""));
+      Object.keys(locations).forEach((county) => {
+        countySelect.add(new Option(county, county));
+      });
+      countySelect.disabled = false;
+      return true;
+    })
+    .catch(() => {
+      countySelect.replaceChildren(new Option("County list unavailable", ""));
+      countySelect.disabled = true;
+      return false;
+    });
+
+  function setConstituencyOptions(county) {
+    constituencySelect.replaceChildren();
+    const constituencies = locations?.[county];
+    if (!constituencies) {
+      constituencySelect.add(new Option("Select a county first", ""));
+      constituencySelect.disabled = true;
+      return;
+    }
+    constituencySelect.add(new Option("Select a constituency", ""));
+    constituencies.forEach((constituency) => {
+      constituencySelect.add(new Option(constituency, constituency));
+    });
+    constituencySelect.disabled = false;
+  }
+
+  studyLevel.addEventListener("change", () => {
+    setStudyYearOptions(studyLevel.value);
+  });
+  countySelect.addEventListener("change", () => {
+    setConstituencyOptions(countySelect.value);
+  });
+
   function showStep(nextStep) {
     step = nextStep;
     document.querySelectorAll(".wizard-step").forEach((node) =>
@@ -43,19 +112,48 @@ if (profileForm) {
     document.querySelector("#wizardBack").hidden = step === 1;
     document.querySelector("#wizardNext").hidden = step === 5;
     document.querySelector("#wizardSubmit").hidden = step !== 5;
+    if (step === 5) {
+      const data = new FormData(profileForm);
+      document.querySelector("#profileReview").innerHTML =
+        `<dl><dt>Level</dt><dd>${escapeHtml(data.get("level"))}</dd>` +
+        `<dt>Institution</dt><dd>${escapeHtml(data.get("institution_name"))}</dd>` +
+        `<dt>Year</dt><dd>${escapeHtml(data.get("year_of_study"))}</dd>` +
+        `<dt>County</dt><dd>${escapeHtml(data.get("county"))}</dd>` +
+        `<dt>Constituency</dt><dd>${escapeHtml(data.get("constituency"))}</dd></dl>`;
+    }
   }
-  document.querySelector("#wizardNext").addEventListener("click", () => {
-    const required = document.querySelector(`.wizard-step[data-step="${step}"] [required]`);
-    if (required && !required.value) { required.focus(); return; }
+  document.querySelector("#wizardNext").addEventListener("click", async () => {
+    if (step === 3 && !(await locationsReady)) {
+      alert("The county and constituency list could not be loaded. Please try again.");
+      return;
+    }
+    const requiredFields = document.querySelectorAll(
+      `.wizard-step[data-step="${step}"] [required]`
+    );
+    for (const field of requiredFields) {
+      if (field.disabled) continue;
+      if (!field.checkValidity()) {
+        field.focus();
+        field.reportValidity();
+        return;
+      }
+    }
     showStep(Math.min(5, step + 1));
   });
   document.querySelector("#wizardBack").addEventListener("click", () => showStep(Math.max(1, step - 1)));
-  document.querySelector("#sampleButton").addEventListener("click", () => {
-    profileForm.elements.level.value = "university";
+  document.querySelector("#sampleButton").addEventListener("click", async () => {
+    if (!(await locationsReady)) {
+      alert("The county and constituency list could not be loaded. Please try again.");
+      return;
+    }
+    profileForm.elements.level.value = "Tertiary";
+    setStudyYearOptions("Tertiary");
     profileForm.elements.institution_type.value = "public";
+    profileForm.elements.institution_name.value = "Machakos University";
     profileForm.elements.year_of_study.value = "1";
-    profileForm.elements.county.value = "Machakos";
-    profileForm.elements.constituency.value = "Mwala";
+    countySelect.value = "Machakos";
+    setConstituencyOptions("Machakos");
+    constituencySelect.value = "Mwala";
     showStep(1);
     document.querySelector("#find").scrollIntoView({ behavior: "smooth" });
   });

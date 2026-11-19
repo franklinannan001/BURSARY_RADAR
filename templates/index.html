@@ -59,16 +59,16 @@
         <div class="step-title"><span id="wizardStep">1</span><div><small>YOUR PROFILE</small><h2 id="wizardTitle">Level of study</h2></div></div>
         <form id="profileForm">
           <div class="wizard-step active" data-step="1">
-            <label>Level of study<select name="level" required><option value="">Select</option><option value="secondary">Secondary</option><option value="tvet">TVET</option><option value="university">University</option></select></label>
+            <label>Level of study<select id="studyLevelDashboard" name="level" required><option value="">Select</option><option value="Primary">Primary</option><option value="Junior Secondary">Junior Secondary</option><option value="Senior Secondary">Senior Secondary</option><option value="Tertiary">Tertiary level</option></select></label>
             <label>Institution type<select name="institution_type"><option value="">Not sure</option><option value="public">Public</option><option value="private">Private</option></select></label>
-            <label>Institution name<input name="institution_name" placeholder="Optional"></label>
+            <label>Institution name<input name="institution_name" placeholder="Enter your school or institution name" required></label>
           </div>
           <div class="wizard-step" data-step="2">
-            <label>Year of study<input name="year_of_study" type="number" min="1" max="8" placeholder="For example 1"></label>
+            <label>Year of study<select id="studyYear" name="year_of_study" required disabled><option value="">Select your level first</option></select></label>
           </div>
           <div class="wizard-step" data-step="3">
-            <label>County<select name="county" required><option value="">Select</option><option>Machakos</option><option>Makueni</option><option>Kitui</option><option>Tharaka-Nithi</option><option>Kisumu</option><option>Siaya</option></select></label>
-            <label>Constituency<select name="constituency"><option value="">Not sure</option><option>Mwala</option><option>Matungulu</option><option>Machakos Town</option></select></label>
+            <label>County<select id="profileCounty" name="county" required disabled><option value="">Loading counties…</option></select></label>
+            <label>Constituency<select id="profileConstituency" name="constituency" required disabled><option value="">Select a county first</option></select></label>
           </div>
           <div class="wizard-step" data-step="4">
             <p class="privacy-note">Optional. These indicators are sent only to the matching API and are never stored.</p>
