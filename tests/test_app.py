@@ -31,3 +31,43 @@ def test_fee_gap_api():
     )
     assert response.status_code == 200
     assert response.get_json()["gap"] == 30000
+
+
+def test_login_page_and_signup_flow():
+    client = app.test_client()
+
+    response = client.get("/")
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert b"Student Login" in response.data
+
+    response = client.post(
+        "/signup",
+        data={
+            "full_name": "Test Student",
+            "enrollment_no": "TEST-001",
+            "email": "test.student@example.com",
+            "password": "secure123",
+            "gender": "Other",
+            "course": "Computer Engineering",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    response = client.post(
+        "/login",
+        data={
+            "email": "test.student@example.com",
+            "password": "secure123",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Test Student" in response.data

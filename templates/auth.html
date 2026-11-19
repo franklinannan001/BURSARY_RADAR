@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ "Create account" if mode == "signup" else "Student login" }} | Bursary Radar</title>
+  <meta name="description" content="Sign in or create a Bursary Radar student account.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell {{ 'signup-shell' if mode == 'signup' else '' }}">
+    <section class="auth-card">
+      <a class="auth-brand" href="{{ url_for('login') }}" aria-label="Bursary Radar home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3 1.5 8.2 12 13.4l8.6-4.3v6.1h2V8.2L12 3Zm-5 8.7v4.8c0 1.7 2.2 3.5 5 3.5s5-1.8 5-3.5v-4.8L12 14l-5-2.3Z"/></svg>
+        </span>
+        <span>Bursary <strong>Radar</strong></span>
+      </a>
+
+      {% if mode == "login" %}
+      <div class="auth-illustration graduation" aria-hidden="true">
+        <div class="cap"><span></span></div>
+        <div class="certificate">BR</div>
+      </div>
+      <h1>Student Login</h1>
+      <form class="auth-form" method="post" action="{{ url_for('login') }}">
+        {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+        <label>
+          <span class="sr-only">Edu Email ID</span>
+          <input type="email" name="email" placeholder="Edu Email ID" autocomplete="email" required>
+        </label>
+        <label>
+          <span class="sr-only">Password</span>
+          <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+        </label>
+        <button class="auth-primary" type="submit">Log In</button>
+        <a class="auth-link" href="#">Forgot Password?</a>
+      </form>
+      <p class="auth-switch">New student? <a href="{{ url_for('signup') }}">Create an account</a></p>
+      {% else %}
+      <div class="auth-heading">
+        <span class="heading-star" aria-hidden="true">✦</span>
+        <h1>Student Registration Form</h1>
+        <span class="heading-star" aria-hidden="true">✦</span>
+      </div>
+      <form class="auth-form registration-form" method="post" action="{{ url_for('signup') }}">
+        {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+        <div class="registration-grid">
+          <label class="field-row"><span class="field-icon" aria-hidden="true">●</span><span><strong>Student Name:</strong><input type="text" name="full_name" placeholder="Enter your full name" autocomplete="name" required></span></label>
+          <label class="field-row"><span class="field-icon" aria-hidden="true">▣</span><span><strong>Enrollment No:</strong><input type="text" name="enrollment_no" placeholder="Enter your Enrollment No." autocomplete="off"></span></label>
+          <label class="field-row"><span class="field-icon" aria-hidden="true">✉</span><span><strong>Email:</strong><input type="email" name="email" placeholder="Enter your email" autocomplete="email" required></span></label>
+          <label class="field-row"><span class="field-icon" aria-hidden="true">♙</span><span><strong>Password:</strong><input type="password" name="password" placeholder="Create a password" autocomplete="new-password" minlength="6" required></span></label>
+        </div>
+        <div class="registration-grid compact">
+          <fieldset class="gender-field">
+            <legend>Gender:</legend>
+            <label><input type="radio" name="gender" value="Male"> Male</label>
+            <label><input type="radio" name="gender" value="Female"> Female</label>
+            <label><input type="radio" name="gender" value="Other"> Other</label>
+          </fieldset>
+          <label class="date-field"><strong>Student date of birth:</strong><input type="date" name="date_of_birth"></label>
+          <label class="course-field"><strong>Course:</strong><select name="course">
+            <option value="">Select a course</option>
+            <option>Computer Engineering</option>
+            <option>Education</option>
+            <option>Business</option>
+            <option>Medicine</option>
+            <option>Law</option>
+            <option>Other</option>
+          </select></label>
+        </div>
+        <div class="auth-actions">
+          <button class="auth-primary register-button" type="submit">Register</button>
+          <button class="auth-secondary" type="reset">Reset</button>
+        </div>
+      </form>
+      <p class="auth-switch">Already registered? <a href="{{ url_for('login') }}">Log in</a></p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

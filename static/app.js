@@ -82,3 +82,16 @@ feeForm.addEventListener("submit", async (event) => {
   document.querySelector("#gapAmount").textContent =
     `KES ${Number(result.gap).toLocaleString("en-KE")}`;
 });
+
+const smsButton = document.querySelector("#smsButton");
+if (smsButton) {
+  smsButton.addEventListener("click", async () => {
+    const response = await fetch("/api/simulate-sms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunity: "your bursary opportunity" }),
+    });
+    const result = await response.json();
+    document.querySelector("#smsText").textContent = result.message;
+  });
+}

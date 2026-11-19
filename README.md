@@ -35,6 +35,10 @@ This is a hackathon MVP built with Python and Flask. It provides:
 
 5. Open `http://127.0.0.1:5000`.
 
+The first visit opens the student login page. Create an account with the **Create an
+account** link; account details are stored locally in `bursary_radar.db`. Set a strong
+`SECRET_KEY` environment variable before deploying the app.
+
 ### Open from another device
 
 The app listens on all network interfaces by default. Start it with:
