@@ -15,78 +15,78 @@
       </span>
       <span>Bursary <strong>Radar</strong></span>
     </a>
-    <nav aria-label="Primary">
+    <nav aria-label="Primary" data-i18n-aria-label="nav.primary">
       <a href="#find" data-i18n="nav.find">Find funding</a>
       <a href="#plan" data-i18n="nav.plan">My plan</a>
       <a href="#verify" data-i18n="nav.verify">How we verify</a>
     </nav>
-    <button id="languageToggle" class="logout-button" type="button" aria-label="Switch language">Swahili</button>
+    <button id="languageToggle" class="logout-button" type="button" aria-label="Switch to Kiswahili">Kiswahili</button>
   </header>
 
   <main>
     {% if poll_only %}
     <section id="poll" class="poll-page">
-      <p class="eyebrow">PROTOTYPE PITCH</p>
-      <h1>Live student poll</h1>
+      <p class="eyebrow" data-i18n="poll.eyebrow">PROTOTYPE PITCH</p>
+      <h1 data-i18n="poll.title">Live student poll</h1>
       <div id="pollQuestions" class="poll-grid"></div>
     </section>
     {% elif admin_only %}
     <section class="admin-page">
-      <h1>Admin review</h1>
-      <p>Enter your token to load the review tools. It stays in memory only.</p>
+      <h1 data-i18n="admin.title">Admin review</h1>
+      <p data-i18n="admin.description">Enter your token to load the review tools. It stays in memory only.</p>
       <form id="adminLogin" class="fee-form">
-        <label>Admin token<input id="adminToken" type="password" autocomplete="off"></label>
-        <button class="primary-button" type="submit">Load admin tools</button>
+        <label><span data-i18n="admin.token">Admin token</span><input id="adminToken" type="password" autocomplete="off"></label>
+        <button class="primary-button" type="submit" data-i18n="admin.load">Load admin tools</button>
       </form>
       <div id="adminOutput" class="admin-output"></div>
     </section>
     {% else %}
-    <div class="prototype-banner">Prototype. Data compiled from public sources and not yet confirmed by funders' offices.</div>
+    <div class="prototype-banner" data-i18n="banner.prototype">Prototype. Data compiled from public sources and not yet confirmed by funders' offices.</div>
     <section class="hero">
       <div>
-        <span class="eyebrow">KENYAN STUDENT FUNDING GUIDE</span>
+        <span class="eyebrow" data-i18n="hero.eyebrow">KENYAN STUDENT FUNDING GUIDE</span>
         <h1 data-i18n="hero.title">Find funding you can apply for.</h1>
         <p data-i18n="hero.copy">A private, browser-first way to understand opportunities and prepare before deadlines.</p>
-        <button id="sampleButton" class="primary-button hero-button" type="button">Try as a sample student</button>
+        <button id="sampleButton" class="primary-button hero-button" type="button" data-i18n="hero.sample">Try as a sample student</button>
       </div>
-      <div class="hero-card" aria-label="Opportunity listings"><strong id="opportunityCount">0</strong><span>opportunities in directory</span></div>
+      <div class="hero-card" aria-label="Opportunity listings" data-i18n-aria-label="hero.listings_aria"><strong id="opportunityCount">0</strong><span data-i18n="hero.opportunity_count">opportunities in directory</span></div>
     </section>
 
-    <div class="warning-banner"><strong>Safety first:</strong> Never pay money to apply. <span>Always confirm details at the official source.</span></div>
+    <div class="warning-banner"><strong data-i18n="safety.title">Safety first:</strong> <span data-i18n="safety.never_pay">Never pay money to apply.</span> <span data-i18n="safety.confirm">Always confirm details at the official source.</span></div>
 
     <section id="find" class="workspace">
       <aside class="profile-panel">
-        <div class="step-title"><span id="wizardStep">1</span><div><small>YOUR PROFILE</small><h2 id="wizardTitle">Level of study</h2></div></div>
+        <div class="step-title"><span id="wizardStep">1</span><div><small data-i18n="profile.title">YOUR PROFILE</small><h2 id="wizardTitle" data-i18n="profile.level">Level of study</h2></div></div>
         <form id="profileForm">
           <div class="wizard-step active" data-step="1">
-            <label>Level of study<select id="studyLevelDashboard" name="level" required><option value="">Select</option><option value="Primary">Primary</option><option value="Junior Secondary">Junior Secondary</option><option value="Senior Secondary">Senior Secondary</option><option value="Tertiary">Tertiary level</option></select></label>
-            <label>Institution type<select name="institution_type"><option value="">Not sure</option><option value="public">Public</option><option value="private">Private</option></select></label>
-            <label>Institution name<input name="institution_name" placeholder="Enter your school or institution name" required></label>
+            <label><span data-i18n="profile.level">Level of study</span><select id="studyLevelDashboard" name="level" required><option value="" data-i18n="profile.select">Select</option><option value="Primary" data-i18n="profile.primary">Primary</option><option value="Junior Secondary" data-i18n="profile.junior">Junior Secondary</option><option value="Senior Secondary" data-i18n="profile.senior">Senior Secondary</option><option value="Tertiary" data-i18n="profile.tertiary">Tertiary level</option></select></label>
+            <label><span data-i18n="profile.institution_type">Institution type</span><select name="institution_type"><option value="" data-i18n="profile.not_sure">Not sure</option><option value="public" data-i18n="profile.public">Public</option><option value="private" data-i18n="profile.private">Private</option></select></label>
+            <label><span data-i18n="profile.institution_name">Institution name</span><input name="institution_name" placeholder="Enter your school or institution name" data-i18n-placeholder="profile.institution_placeholder" required></label>
           </div>
           <div class="wizard-step" data-step="2">
-            <label>Year of study<select id="studyYear" name="year_of_study" required disabled><option value="">Select your level first</option></select></label>
+            <label><span data-i18n="profile.year">Year of study</span><select id="studyYear" name="year_of_study" required disabled><option value="" data-i18n="profile.select_level">Select your level first</option></select></label>
           </div>
           <div class="wizard-step" data-step="3">
-            <label>County<select id="profileCounty" name="county" required disabled><option value="">Loading counties…</option></select></label>
-            <label>Constituency<select id="profileConstituency" name="constituency" required disabled><option value="">Select a county first</option></select></label>
+            <label><span data-i18n="profile.county">County</span><select id="profileCounty" name="county" required disabled><option value="" data-i18n="profile.loading_counties">Loading counties…</option></select></label>
+            <label><span data-i18n="profile.constituency">Constituency</span><select id="profileConstituency" name="constituency" required disabled><option value="" data-i18n="profile.select_county_first">Select a county first</option></select></label>
           </div>
           <div class="wizard-step" data-step="4">
-            <p class="privacy-note">Optional. These indicators are sent only to the matching API and are never stored.</p>
+            <p class="privacy-note" data-i18n="profile.needs_note">Optional. These indicators are sent only to the matching API and are never stored.</p>
             <div class="check-grid">
-              <label><input type="checkbox" name="need_flag" value="orphan"> Orphan</label>
-              <label><input type="checkbox" name="need_flag" value="disability"> Disability</label>
-              <label><input type="checkbox" name="need_flag" value="low_income"> Low income</label>
-              <label><input type="checkbox" name="need_flag" value="single_parent"> Single parent household</label>
+              <label><input type="checkbox" name="need_flag" value="orphan"> <span data-i18n="profile.orphan">Orphan</span></label>
+              <label><input type="checkbox" name="need_flag" value="disability"> <span data-i18n="profile.disability">Disability</span></label>
+              <label><input type="checkbox" name="need_flag" value="low_income"> <span data-i18n="profile.low_income">Low income</span></label>
+              <label><input type="checkbox" name="need_flag" value="single_parent"> <span data-i18n="profile.single_parent">Single parent household</span></label>
             </div>
           </div>
           <div class="wizard-step" data-step="5">
-            <p>Review your profile, then request matches. No identifying data is stored.</p>
+            <p data-i18n="profile.review_note">Review your profile, then request matches. No identifying data is stored.</p>
             <div id="profileReview"></div>
           </div>
           <div class="wizard-actions">
-            <button id="wizardBack" class="outline-button" type="button" hidden>Back</button>
-            <button id="wizardNext" class="primary-button" type="button">Next</button>
-            <button id="wizardSubmit" class="primary-button" type="submit" hidden>Find opportunities</button>
+            <button id="wizardBack" class="outline-button" type="button" hidden data-i18n="wizard.back">Back</button>
+            <button id="wizardNext" class="primary-button" type="button" data-i18n="wizard.next">Next</button>
+            <button id="wizardSubmit" class="primary-button" type="submit" hidden data-i18n="wizard.find">Find opportunities</button>
           </div>
         </form>
       </aside>
@@ -94,39 +94,39 @@
       <div class="content">
         <section id="matches" class="matches-section">
           <div class="section-heading">
-            <div><small>PERSONALISED RESULTS</small><h2>Opportunities you can apply for</h2></div>
+            <div><small data-i18n="matches.eyebrow">PERSONALISED RESULTS</small><h2 data-i18n="matches.title">Opportunities you can apply for</h2></div>
             <span id="matchCount" class="count-pill">0 opportunities</span>
           </div>
-          <div id="matchesList" class="matches-list"><div class="empty-state">Complete the profile to see opportunities.</div></div>
+          <div id="matchesList" class="matches-list"><div class="empty-state" data-i18n="matches.complete_profile">Complete the profile to see opportunities.</div></div>
         </section>
 
         <section id="plan" class="reminder-card">
           <div>
-            <small>MY PLAN</small>
-            <h2>Saved opportunities</h2>
-            <p id="planSummary">Nothing saved yet. Use “Add to my plan” on an opportunity.</p>
+            <small data-i18n="plan.eyebrow">MY PLAN</small>
+            <h2 data-i18n="plan.title">Saved opportunities</h2>
+            <p id="planSummary" data-i18n="plan.empty">Nothing saved yet. Use “Add to my plan” on an opportunity.</p>
             <div id="planList"></div>
           </div>
-          <button id="smsButton" class="secondary-button" type="button">Preview SMS reminders</button>
+          <button id="smsButton" class="secondary-button" type="button" data-i18n="plan.sms">Preview SMS reminders</button>
         </section>
 
         <section id="verify" class="planner">
-          <small>HOW WE VERIFY</small>
-          <h2>Confidence is not a promise</h2>
+          <small data-i18n="verify.eyebrow">HOW WE VERIFY</small>
+          <h2 data-i18n="verify.title">Confidence is not a promise</h2>
           <div class="confidence-guide">
-            <p><strong>Green:</strong> Official or university source, checked within 14 days, with a deadline or closed status.</p>
-            <p><strong>Amber:</strong> Credible secondary source, or an older official source, or a confirmed opportunity with no deadline.</p>
-            <p><strong>Red:</strong> Never verified or sourced from an aggregator/other source.</p>
+            <p><strong data-i18n="verify.green_label">Green:</strong> <span data-i18n="verify.green">Official or university source, checked within 14 days, with a deadline or closed status.</span></p>
+            <p><strong data-i18n="verify.amber_label">Amber:</strong> <span data-i18n="verify.amber">Credible secondary source, or an older official source, or a confirmed opportunity with no deadline.</span></p>
+            <p><strong data-i18n="verify.red_label">Red:</strong> <span data-i18n="verify.red">Never verified or sourced from an aggregator/other source.</span></p>
           </div>
-          <p>AI extraction, if used, creates drafts for human review. It never publishes automatically. No profile details are stored.</p>
+          <p data-i18n="verify.ai">AI extraction, if used, creates drafts for human review. It never publishes automatically. No profile details are stored.</p>
         </section>
       </div>
     </section>
     <section id="feedback" class="feedback-widget">
-      <h2>Was this useful?</h2>
-      <div id="feedbackStars" class="feedback-stars" aria-label="Rating"></div>
-      <textarea id="feedbackComment" maxlength="300" placeholder="Optional feedback (300 characters maximum)"></textarea>
-      <button id="feedbackSubmit" class="secondary-button" type="button">Send feedback</button>
+      <h2 data-i18n="feedback.title">Was this useful?</h2>
+      <div id="feedbackStars" class="feedback-stars" aria-label="Rating" data-i18n-aria-label="feedback.rating_group"></div>
+      <textarea id="feedbackComment" maxlength="300" placeholder="Optional feedback (300 characters maximum)" data-i18n-placeholder="feedback.placeholder"></textarea>
+      <button id="feedbackSubmit" class="secondary-button" type="button" data-i18n="feedback.send">Send feedback</button>
     </section>
     {% endif %}
   </main>
