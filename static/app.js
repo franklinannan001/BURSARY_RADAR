@@ -11,7 +11,7 @@ const translations = {
     "banner.prototype": "Prototype. Data compiled from public sources and not yet confirmed by funders' offices.",
     "hero.eyebrow": "KENYAN STUDENT FUNDING GUIDE",
     "hero.title": "Find funding you can apply for.",
-    "hero.copy": "A private, browser-first way to understand opportunities and prepare before deadlines.",
+    "hero.copy": "A browser-first way to find funding opportunities and prepare to apply.",
     "hero.sample": "Try as a sample student",
     "hero.opportunity_count": "opportunities in directory",
     "hero.listings_aria": "Opportunity listings",
@@ -50,7 +50,7 @@ const translations = {
     "profile.low_income": "Low income",
     "profile.single_parent": "Single parent household",
     "profile.review": "Review",
-    "profile.review_note": "Review your profile, then request matches. No identifying data is stored.",
+    "profile.review_note": "Review your profile, then request matches. Details are stored only if you submit an application.",
     "profile.review_level": "Level",
     "profile.review_institution": "Institution",
     "profile.review_year": "Year",
@@ -90,6 +90,28 @@ const translations = {
     "opportunity.already_added": "Already in my plan",
     "opportunity.source": "Go to source",
     "opportunity.report": "Report outdated",
+    "opportunity.apply": "Apply",
+    "application.title": "Apply for this bursary",
+    "application.applicant": "Applicant",
+    "application.level": "Level",
+    "application.institution": "Institution",
+    "application.year": "Year of study",
+    "application.county": "County",
+    "application.constituency": "Constituency",
+    "application.location_note": "County and constituency are self-declared and checked against the bursary's location rules. Identity documents do not prove current residence.",
+    "application.document_type": "Required identity document",
+    "application.national_id": "National ID",
+    "application.birth_certificate": "Birth certificate",
+    "application.identity_file": "Upload a clear ID or birth certificate image (JPEG or PNG)",
+    "application.passport_file": "Passport image (optional, for MRZ parsing)",
+    "application.review_note": "OCR and MRZ results are screening aids, not proof of identity or residence. Authorized officials can review retained uploads.",
+    "application.confirm_location": "I confirm that I currently live in the county and constituency shown above.",
+    "application.submit": "Submit application",
+    "application.submitting": "Submitting application...",
+    "application.cancel": "Cancel",
+    "application.success": "Application submitted for {opportunity}.",
+    "application.submitted": "Applied",
+    "application.profile_missing": "Find opportunities with your profile before applying.",
     "plan.eyebrow": "MY PLAN",
     "plan.title": "Saved opportunities",
     "plan.empty": "Nothing saved yet. Use “Add to my plan” on an opportunity.",
@@ -105,7 +127,7 @@ const translations = {
     "verify.green_label": "Green:",
     "verify.amber_label": "Amber:",
     "verify.red_label": "Red:",
-    "verify.ai": "AI extraction, if used, creates drafts for human review. It never publishes automatically. No profile details are stored.",
+    "verify.ai": "AI extraction, if used, creates drafts for human review and never publishes automatically. Application details are stored only when submitted.",
     "feedback.title": "Was this useful?",
     "feedback.placeholder": "Optional feedback (300 characters maximum)",
     "feedback.send": "Send feedback",
@@ -143,7 +165,7 @@ const translations = {
     "banner.prototype": "Mfano. Taarifa zimekusanywa kutoka vyanzo vya umma na bado hazijathibitishwa na ofisi za wafadhili.",
     "hero.eyebrow": "MWONGOZO WA UFADHILI WA WANAFUNZI KENYA",
     "hero.title": "Tafuta ufadhili unaoweza kuomba.",
-    "hero.copy": "Njia ya faragha inayotumia kivinjari kukusaidia kuelewa fursa na kujiandaa kabla ya makataa.",
+    "hero.copy": "Njia inayotumia kivinjari kutafuta fursa za ufadhili na kujiandaa kutuma maombi.",
     "hero.sample": "Jaribu kama mwanafunzi wa mfano",
     "hero.opportunity_count": "fursa kwenye orodha",
     "hero.listings_aria": "Orodha ya fursa",
@@ -182,7 +204,7 @@ const translations = {
     "profile.low_income": "Kipato cha chini",
     "profile.single_parent": "Kaya yenye mzazi mmoja",
     "profile.review": "Kagua",
-    "profile.review_note": "Kagua wasifu wako, kisha utafute fursa zinazokufaa. Taarifa zinazokutambulisha hazihifadhiwi.",
+    "profile.review_note": "Kagua wasifu wako, kisha utafute fursa zinazokufaa. Maelezo yanahifadhiwa tu ukituma ombi.",
     "profile.review_level": "Kiwango",
     "profile.review_institution": "Taasisi",
     "profile.review_year": "Mwaka",
@@ -222,6 +244,28 @@ const translations = {
     "opportunity.already_added": "Tayari ipo kwenye mpango wangu",
     "opportunity.source": "Nenda kwenye chanzo",
     "opportunity.report": "Ripoti taarifa zilizopitwa na wakati",
+    "opportunity.apply": "Omba",
+    "application.title": "Omba ufadhili huu",
+    "application.applicant": "Mwombaji",
+    "application.level": "Kiwango",
+    "application.institution": "Taasisi",
+    "application.year": "Mwaka wa masomo",
+    "application.county": "Kaunti",
+    "application.constituency": "Eneo bunge",
+    "application.location_note": "Kaunti na eneo bunge yanatangazwa na mwombaji na kulinganishwa na masharti ya eneo la ufadhili. Hati za utambulisho hazithibitishi makazi ya sasa.",
+    "application.document_type": "Hati ya utambulisho inayohitajika",
+    "application.national_id": "Kitambulisho cha taifa",
+    "application.birth_certificate": "Cheti cha kuzaliwa",
+    "application.identity_file": "Pakia picha wazi ya kitambulisho au cheti cha kuzaliwa (JPEG au PNG)",
+    "application.passport_file": "Picha ya pasipoti (hiari, kwa uchanganuzi wa MRZ)",
+    "application.review_note": "Matokeo ya OCR na MRZ ni msaada wa uchunguzi tu, si uthibitisho wa utambulisho au makazi. Maafisa walioidhinishwa wanaweza kukagua hati zilizohifadhiwa.",
+    "application.confirm_location": "Ninathibitisha kuwa ninaishi sasa katika kaunti na eneo bunge lililoonyeshwa hapo juu.",
+    "application.submit": "Wasilisha ombi",
+    "application.submitting": "Ombi linawasilishwa...",
+    "application.cancel": "Ghairi",
+    "application.success": "Ombi la {opportunity} limewasilishwa.",
+    "application.submitted": "Umeomba",
+    "application.profile_missing": "Tafuta fursa kwa kutumia wasifu wako kabla ya kutuma ombi.",
     "plan.eyebrow": "MPANGO WANGU",
     "plan.title": "Fursa zilizohifadhiwa",
     "plan.empty": "Bado hakuna kilichohifadhiwa. Tumia “Ongeza kwenye mpango wangu” kwenye fursa.",
@@ -237,7 +281,7 @@ const translations = {
     "verify.green_label": "Kijani:",
     "verify.amber_label": "Manjano:",
     "verify.red_label": "Nyekundu:",
-    "verify.ai": "Ikiwa AI itatumika kutoa taarifa, huunda rasimu kwa ukaguzi wa binadamu. Haichapishi kiotomatiki. Taarifa za wasifu hazihifadhiwi.",
+    "verify.ai": "Ikiwa AI itatumika kutoa taarifa, huunda rasimu kwa ukaguzi wa binadamu na haichapishi kiotomatiki. Maelezo ya ombi huhifadhiwa tu likiwasilishwa.",
     "feedback.title": "Je, hili limekusaidia?",
     "feedback.placeholder": "Maoni ya hiari (isizidi herufi 300)",
     "feedback.send": "Tuma maoni",
@@ -268,6 +312,7 @@ const translations = {
 let language = localStorage.getItem("br-language");
 if (language !== "sw" && language !== "en") language = "en";
 let latestMatchResult = null;
+let latestMatchProfile = null;
 let latestReminderResult = null;
 
 function t(key, values = {}) {
@@ -524,6 +569,7 @@ if (profileForm) {
       if (!response.ok) throw new Error("Could not match opportunities");
       const result = await response.json();
       latestMatchResult = result;
+      latestMatchProfile = profile;
       list.replaceChildren();
       document.querySelector("#matchCount").textContent = t("matches.count", {count: result.likely.length + result.check_eligibility.length});
       renderMatchGroup(t("matches.likely"), result.likely, list);
@@ -559,12 +605,93 @@ function renderMatchGroup(title, matches, container) {
     }
     const card = document.createElement("article");
     card.className = "match-card";
+    card.dataset.opportunityId = opportunity.id;
     card.innerHTML =
       `<div class="match-main"><div class="badge-row"><span class="provider-chip">${escapeHtml(opportunity.provider_type.replaceAll("_"," "))}</span><span class="confidence ${opportunity.confidence.toLowerCase()}">${escapeHtml(opportunity.confidence)}</span></div><h3>${escapeHtml(opportunity.name)}</h3><p>${escapeHtml(opportunity.provider)}</p><div class="meta"><span>${escapeHtml(opportunity.deadline || t("opportunity.deadline_unknown"))}</span><span>${escapeHtml(opportunity.amount_note || (opportunity.amount_published ? t("opportunity.amount_published") : t("opportunity.amount_unknown")))}</span>${additionalDetails.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("")}</div><p class="match-reasons">${(match.reasons || []).map((reason) => escapeHtml(translateMatchReason(reason))).join(" • ")}</p><details><summary>${t("opportunity.documents")}</summary><p>${escapeHtml(opportunity.documents_required ? opportunity.documents_required.join(", ") : t("opportunity.documents_unknown"))}</p><p>${escapeHtml(opportunity.how_to_apply || t("opportunity.source_instructions"))}</p></details></div>
-       <div class="match-actions"><button class="outline-button plan-button" type="button">${t("opportunity.add")}</button><a class="source-link" href="${escapeHtml(opportunity.apply_url || opportunity.source_url)}" target="_blank" rel="noopener noreferrer">${t("opportunity.source")}</a><button class="outline-button report-button" type="button">${t("opportunity.report")}</button></div>`;
+       <div class="match-actions"><button class="outline-button apply-button" type="button">${t("opportunity.apply")}</button><button class="outline-button plan-button" type="button">${t("opportunity.add")}</button><a class="source-link" href="${escapeHtml(opportunity.apply_url || opportunity.source_url)}" target="_blank" rel="noopener noreferrer">${t("opportunity.source")}</a><button class="outline-button report-button" type="button">${t("opportunity.report")}</button></div>`;
+    card.querySelector(".apply-button").addEventListener("click", () => openApplicationDialog(opportunity));
     card.querySelector(".plan-button").addEventListener("click", (event) => addToPlan(opportunity, event.currentTarget));
     card.querySelector(".report-button").addEventListener("click", () => reportOpportunity(opportunity));
     container.appendChild(card);
+  });
+}
+
+function openApplicationDialog(opportunity) {
+  const dialog = document.querySelector("#applicationDialog");
+  const form = document.querySelector("#applicationForm");
+  if (!latestMatchProfile) {
+    document.querySelector("#applicationStatus").textContent = t("application.profile_missing");
+    return;
+  }
+  form.elements.opportunity_id.value = opportunity.id;
+  form.elements.profile.value = JSON.stringify(latestMatchProfile);
+  document.querySelector("#applicationOpportunityName").textContent = opportunity.name;
+  const profileList = document.querySelector("#applicationProfile");
+  profileList.replaceChildren();
+  [
+    [t("application.level"), latestMatchProfile.level],
+    [t("application.institution"), latestMatchProfile.institution_name],
+    [t("application.year"), latestMatchProfile.year_of_study],
+    [t("application.county"), latestMatchProfile.county],
+    [t("application.constituency"), latestMatchProfile.constituency],
+  ].forEach(([label, value]) => {
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value == null ? "" : String(value);
+    profileList.append(term, description);
+  });
+  document.querySelector("#applicationError").textContent = "";
+  const status = document.querySelector("#applicationStatus");
+  status.textContent = "";
+  status.className = "application-status";
+  dialog.showModal();
+}
+
+const applicationForm = document.querySelector("#applicationForm");
+if (applicationForm) {
+  const dialog = document.querySelector("#applicationDialog");
+  const submitButton = document.querySelector("#submitApplication");
+  applicationForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    submitButton.textContent = t("application.submitting");
+    const formData = new FormData(applicationForm);
+    try {
+      const response = await fetch("/api/applications", {
+        method: "POST",
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error?.message || `Request failed (${response.status})`);
+      }
+      const opportunityName = document.querySelector("#applicationOpportunityName").textContent;
+      const appliedId = formData.get("opportunity_id");
+      document.querySelectorAll(".match-card").forEach((card) => {
+        if (card.dataset.opportunityId === appliedId) {
+          const button = card.querySelector(".apply-button");
+          button.disabled = true;
+          button.textContent = t("application.submitted");
+        }
+      });
+      dialog.close();
+      applicationForm.reset();
+      const status = document.querySelector("#applicationStatus");
+      status.textContent = t("application.success", {opportunity: opportunityName});
+      status.className = "application-status success";
+    } catch (error) {
+      document.querySelector("#applicationError").textContent =
+        error.message || "Could not submit the application.";
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = t("application.submit");
+    }
+  });
+  document.querySelector("#closeApplication").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    applicationForm.reset();
+    document.querySelector("#applicationError").textContent = "";
   });
 }
 

@@ -117,6 +117,49 @@ def init_db():
             )
         """)
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS applications (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                applicant_name TEXT NOT NULL,
+                applicant_email TEXT NOT NULL,
+                opportunity_id TEXT NOT NULL,
+                opportunity_name TEXT NOT NULL,
+                level TEXT NOT NULL,
+                institution_type TEXT,
+                institution_name TEXT NOT NULL,
+                year_of_study INTEGER NOT NULL,
+                county TEXT NOT NULL,
+                constituency TEXT NOT NULL,
+                residence_status TEXT NOT NULL,
+                identity_document_type TEXT NOT NULL,
+                identity_document BLOB NOT NULL,
+                identity_mime_type TEXT NOT NULL,
+                passport_document BLOB,
+                passport_mime_type TEXT,
+                identity_ocr_status TEXT NOT NULL,
+                identity_name_status TEXT NOT NULL,
+                mrz_status TEXT NOT NULL,
+                mrz_name_status TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'submitted',
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, opportunity_id)
+            )
+        """)
+        application_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(applications)").fetchall()
+        }
+        application_migrations = {
+            "applicant_name": "TEXT NOT NULL DEFAULT ''",
+            "applicant_email": "TEXT NOT NULL DEFAULT ''",
+            "opportunity_name": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, column_type in application_migrations.items():
+            if column not in application_columns:
+                connection.execute(
+                    f"ALTER TABLE applications ADD COLUMN {column} {column_type}"
+                )
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS app_migrations (
                 id TEXT PRIMARY KEY, applied_at TEXT NOT NULL
             )
@@ -176,7 +219,10 @@ def get_opportunities(filters=None):
     if level:
         opportunities = [o for o in opportunities if o["levels"] is None or level in o["levels"]]
     if county:
-        opportunities = [o for o in opportunities if o["counties"] is None or county in o["counties"]]
+        opportunities = [
+            o for o in opportunities
+            if not o["counties"] or county in o["counties"]
+        ]
     if status:
         opportunities = [o for o in opportunities if o["status"] == status]
     return opportunities
@@ -255,15 +301,15 @@ def match_opportunities(profile):
             unknown = True
 
         types = opportunity["institution_types"]
-        if types is not None:
+        if types is None:
+            unknown = True
+        elif types:
             if institution_type is None:
                 unknown = True
             elif institution_type not in types:
                 continue
             else:
                 reasons.append("Matched because: institution type is included")
-        else:
-            unknown = True
 
         required_name = opportunity["institution_name"]
         if required_name:
@@ -272,13 +318,13 @@ def match_opportunities(profile):
             reasons.append("Matched because: institution name matches")
 
         counties = opportunity["counties"]
-        if counties is not None:
+        if counties:
             if not county or not contains_case_insensitive(counties, county):
                 continue
             reasons.append("Matched because: county matches")
 
         constituencies = opportunity["constituencies"]
-        if constituencies is not None:
+        if constituencies:
             if not constituency or not contains_case_insensitive(constituencies, constituency):
                 continue
             reasons.append("Matched because: constituency matches")

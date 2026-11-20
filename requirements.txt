@@ -3,3 +3,7 @@ pytest>=8.0,<10
 Flask-Limiter>=3.8,<4
 gunicorn>=23,<24
 gunicorn
+Pillow>=11,<13
+pytesseract>=0.3.13,<0.4
+cryptography>=45,<47
+python-dotenv>=1.0,<2

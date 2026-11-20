@@ -133,6 +133,18 @@
       </div>
       <div id="bursaryList" class="admin-bursary-list" aria-live="polite"></div>
     </section>
+
+    <section class="admin-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Student applications</h2>
+          <p class="admin-hint">Residence is self-declared and location-matched; ID and MRZ checks require human review.</p>
+        </div>
+        <button id="refreshApplications" class="secondary-button" type="button">Refresh applications</button>
+      </div>
+      <div id="applicationAdminStatus" class="admin-status" role="status" aria-live="polite"></div>
+      <div id="applicationList" class="admin-bursary-list" aria-live="polite"></div>
+    </section>
   </main>
   <script src="{{ url_for('static', filename='admin.js') }}"></script>
 </body>

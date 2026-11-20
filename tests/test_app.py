@@ -2,7 +2,11 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
+
+from cryptography.fernet import Fernet
+from PIL import Image
 
 from app import app
 from bursary_model import DB_PATH, compute_confidence, match_opportunities
@@ -77,6 +81,30 @@ def test_matching_public_private_county_constituency(monkeypatch):
     private_check = {m["opportunity"]["name"] for m in private_match["check_eligibility"]}
     assert private_names == {"Student loan"}
     assert private_check == {"Mwala fund"}
+
+
+def test_empty_bursary_restrictions_mean_open_to_all_locations_and_institutions(monkeypatch):
+    opportunity = {
+        "id": "nationwide-fund",
+        "name": "Nationwide fund",
+        "deadline": None,
+        "levels": ["primary"],
+        "institution_types": [],
+        "institution_name": None,
+        "counties": [],
+        "constituencies": [],
+        "need_flags": [],
+        "gender_restriction": None,
+    }
+    monkeypatch.setattr("bursary_model.get_opportunities", lambda filters=None: [opportunity])
+    result = match_opportunities({
+        "level": "Primary",
+        "institution_type": "public",
+        "county": "Nairobi",
+        "constituency": "Westlands",
+        "need_flags": [],
+    })
+    assert [item["opportunity"]["id"] for item in result["likely"]] == ["nationwide-fund"]
 
 
 def test_null_restrictions_go_to_check_eligibility(monkeypatch):
@@ -190,6 +218,7 @@ def test_public_pages_and_removed_seed_entries():
     assert client.get("/signup").status_code == 200
     assert client.get("/admin").headers["Location"].endswith("/login")
     assert client.get("/healthz").status_code == 200
+    assert b"applicationDialog" not in client.get("/poll").data
     bundled_ids = {
         "hef-government-scholarship", "helb-loan", "machakos-county-bursary",
         "machakos-university-internal-bursary", "ngcdf-mwala-bursary",
@@ -470,3 +499,228 @@ def test_dashboard_profile_levels_years_and_counties():
         json={**profile, "level": "Tertiary", "institution_name": ""},
     )
     assert missing_name.status_code == 400
+
+
+def test_td3_mrz_checks_and_name(monkeypatch):
+    import application_documents
+
+    parse_td3_mrz = application_documents.parse_td3_mrz
+
+    sample = (
+        "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\n"
+        "L898902C36UTO7408122F1204159ZE184226B<<<<<10"
+    )
+    parsed = parse_td3_mrz(sample)
+    assert parsed == {"valid": True, "name": "ERIKSSON ANNA MARIA"}
+    assert parse_td3_mrz(sample[:-1] + "1")["valid"] is False
+    assert parse_td3_mrz("not a passport") is None
+    ocr_results = iter(("ANNA MARIA ERIKSSON", sample))
+    monkeypatch.setattr(
+        application_documents, "_ocr_text", lambda image: next(ocr_results)
+    )
+    checks = application_documents.inspect_documents(b"identity", b"passport", "Anna Maria Eriksson")
+    assert checks == {
+        "identity_ocr_status": "readable",
+        "identity_name_status": "matched",
+        "mrz_status": "valid",
+        "mrz_name_status": "matched",
+    }
+
+
+def test_student_application_matching_encrypted_documents_and_admin_review(monkeypatch):
+    import app as app_module
+
+    admin_client = app.test_client()
+    student_client = app.test_client()
+    suffix = uuid.uuid4().hex
+    admin_email = f"application-admin-{suffix}@county.go.ke"
+    student_email = f"applicant-{suffix}@example.com"
+    application_key = Fernet.generate_key().decode()
+    monkeypatch.setenv("APPLICATION_DOCUMENT_KEY", application_key)
+    monkeypatch.setattr(
+        app_module,
+        "inspect_documents",
+        lambda identity, passport, name: {
+            "identity_ocr_status": "readable",
+            "identity_name_status": "matched",
+            "mrz_status": "not_provided",
+            "mrz_name_status": "not_checked",
+        },
+    )
+    opportunity_id = None
+    application_id = None
+    try:
+        assert admin_client.post("/signup", data={
+            "account_type": "admin",
+            "full_name": "Application Reviewer",
+            "email": admin_email,
+            "password": "secure123",
+        }).status_code == 302
+        assert admin_client.post("/login", data={
+            "account_type": "admin",
+            "email": admin_email,
+            "password": "secure123",
+        }).status_code == 302
+
+        assert student_client.post("/signup", data={
+            "account_type": "student",
+            "full_name": "Student Applicant",
+            "email": student_email,
+            "password": "secure123",
+            "study_level": "Primary",
+            "course": "Grade 1",
+        }).status_code == 302
+        assert student_client.post("/login", data={
+            "account_type": "student",
+            "email": student_email,
+            "password": "secure123",
+        }).status_code == 302
+        dashboard = student_client.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert b'id="applicationDialog"' in dashboard.data
+        assert b"Student Applicant" in dashboard.data
+
+        start = datetime.now(timezone.utc).date() + timedelta(days=60)
+        end = start + timedelta(days=180)
+        uploaded = admin_client.post("/api/admin/bursaries", json={
+            "name": f"Application Test Bursary {suffix}",
+            "provider": "Machakos County Government",
+            "provider_type": "county_government",
+            "description": "A test bursary for application workflow.",
+            "levels": ["primary"],
+            "institution_types": [],
+            "institution_name": "",
+            "counties": ["Machakos"],
+            "constituencies": ["Mwala"],
+            "eligibility_notes": "Residents of Machakos County.",
+            "need_flags": [],
+            "gender_restriction": None,
+            "amount_published": False,
+            "amount_min": None,
+            "amount_max": None,
+            "amount_note": "Not disclosed by provider",
+            "number_of_bursaries": 1,
+            "disbursement_start": start.isoformat(),
+            "disbursement_end": end.isoformat(),
+            "deadline": (start - timedelta(days=10)).isoformat(),
+            "window_note": "",
+            "is_recurring": False,
+            "status": "open",
+            "documents_required": ["National ID"],
+            "how_to_apply": "Submit online.",
+            "apply_url": "https://machakos.go.ke/apply",
+            "source_url": "https://machakos.go.ke/bursaries",
+        })
+        assert uploaded.status_code == 201
+        opportunity_id = uploaded.get_json()["id"]
+
+        image_buffer = BytesIO()
+        Image.new("RGB", (40, 40), "white").save(image_buffer, format="PNG")
+        image_bytes = image_buffer.getvalue()
+        profile = {
+            "level": "Primary",
+            "institution_type": "public",
+            "institution_name": "Mwala Primary School",
+            "year_of_study": 1,
+            "county": "Machakos",
+            "constituency": "Mwala",
+            "need_flags": [],
+        }
+
+        def submission(profile_data):
+            return {
+                "profile": json.dumps(profile_data),
+                "opportunity_id": opportunity_id,
+                "residence_confirmed": "yes",
+                "identity_document_type": "national_id",
+                "identity_document": (BytesIO(image_bytes), "id.png"),
+            }
+
+        wrong_location = student_client.post(
+            "/api/applications",
+            data=submission({**profile, "county": "Kiambu", "constituency": "Thika Town"}),
+            content_type="multipart/form-data",
+        )
+        assert wrong_location.status_code == 409
+        invalid_document_data = submission(profile)
+        invalid_document_data["identity_document"] = (
+            BytesIO(b"x" * (1024 * 1024 + 1)),
+            "id.png",
+        )
+        invalid_document = student_client.post(
+            "/api/applications",
+            data=invalid_document_data,
+            content_type="multipart/form-data",
+        )
+        assert invalid_document.status_code == 400
+
+        response = student_client.post(
+            "/api/applications",
+            data=submission(profile),
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 201
+        result = response.get_json()
+        application_id = result["application_id"]
+        assert result["residence_status"] == "self_declared_match"
+        assert result["document_checks"]["identity_name_status"] == "matched"
+
+        with sqlite3.connect(DB_PATH) as connection:
+            encrypted_image = connection.execute(
+                "SELECT identity_document FROM applications WHERE id=?",
+                (application_id,),
+            ).fetchone()[0]
+        assert encrypted_image != image_bytes
+        assert Fernet(application_key.encode()).decrypt(encrypted_image).startswith(b"\xff\xd8")
+
+        applications = admin_client.get("/api/admin/applications")
+        assert applications.status_code == 200
+        application = next(
+            item for item in applications.get_json() if item["id"] == application_id
+        )
+        assert application["full_name"] == "Student Applicant"
+        assert application["residence_status"] == "self_declared_match"
+        assert student_client.get("/api/admin/applications").status_code == 403
+        assert student_client.get(
+            f"/api/admin/applications/{application_id}/documents/identity"
+        ).status_code == 403
+
+        document = admin_client.get(
+            f"/api/admin/applications/{application_id}/documents/identity"
+        )
+        assert document.status_code == 200
+        assert document.content_type == "image/jpeg"
+        assert document.data == Fernet(application_key.encode()).decrypt(encrypted_image)
+
+        duplicate = student_client.post(
+            "/api/applications",
+            data=submission(profile),
+            content_type="multipart/form-data",
+        )
+        assert duplicate.status_code == 409
+        updated = admin_client.post(
+            f"/api/admin/applications/{application_id}/status",
+            json={"status": "under_review"},
+        )
+        assert updated.status_code == 200
+        assert updated.get_json()["status"] == "under_review"
+    finally:
+        with sqlite3.connect(DB_PATH) as connection:
+            if application_id:
+                connection.execute(
+                    "DELETE FROM applications WHERE id=?",
+                    (application_id,),
+                )
+            if opportunity_id:
+                connection.execute(
+                    "DELETE FROM applications WHERE opportunity_id=?",
+                    (opportunity_id,),
+                )
+                connection.execute(
+                    "DELETE FROM opportunities WHERE id=?",
+                    (opportunity_id,),
+                )
+            connection.execute(
+                "DELETE FROM users WHERE email IN (?,?)",
+                (admin_email, student_email),
+            )

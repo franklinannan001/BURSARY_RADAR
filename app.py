@@ -11,8 +11,18 @@ from urllib.parse import urlparse
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from application_documents import (
+    DocumentProcessingUnavailable,
+    InvalidDocument,
+    decrypt_document,
+    document_cipher,
+    encrypt_document,
+    inspect_documents,
+    sanitize_image,
+)
 from bursary_model import (
     DB_PATH,
     get_connection,
@@ -22,6 +32,7 @@ from bursary_model import (
     match_opportunities,
 )
 
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "bursary-radar-local-development-key")
@@ -163,6 +174,18 @@ def admin_session_required(view):
     return wrapped
 
 
+def student_session_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = current_user()
+        if not user:
+            return api_error("Authentication required", 401)
+        if user["role"] != "student":
+            return api_error("Student access required", 403)
+        return view(*args, **kwargs)
+    return wrapped
+
+
 @app.route("/")
 @login_required
 def index():
@@ -173,9 +196,10 @@ def index():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    if current_user()["role"] == "admin":
+    user = current_user()
+    if user["role"] == "admin":
         return redirect(url_for("admin_page"))
-    return render_template("index.html")
+    return render_template("index.html", user=user)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -356,6 +380,272 @@ def public_match():
     if institution_type not in (None, "public", "private"):
         return api_error("institution_type must be public or private")
     return jsonify(match_opportunities(profile))
+
+
+@app.route("/api/applications", methods=["POST"])
+@student_session_required
+@limiter.limit("5 per minute")
+def submit_application():
+    request.max_content_length = 10 * 1024 * 1024
+    try:
+        profile = json.loads(request.form.get("profile", ""))
+    except json.JSONDecodeError:
+        return api_error("A valid matched student profile is required")
+    if not isinstance(profile, dict):
+        return api_error("A valid matched student profile is required")
+    if request.form.get("residence_confirmed") != "yes":
+        return api_error("Confirm that the listed county and constituency are current")
+
+    level_ranges = {
+        "Primary": range(1, 7),
+        "Junior Secondary": range(1, 4),
+        "Senior Secondary": range(1, 4),
+        "Tertiary": range(1, 6),
+    }
+    level = profile.get("level")
+    if not isinstance(level, str) or level not in level_ranges:
+        return api_error("Select a valid level of study")
+    year_value = profile.get("year_of_study")
+    if isinstance(year_value, bool) or not isinstance(year_value, (int, str)):
+        return api_error("A valid year of study is required")
+    try:
+        year = int(year_value)
+    except ValueError:
+        return api_error("A valid year of study is required")
+    if year not in level_ranges[level]:
+        return api_error("Year of study is outside the selected level's range")
+
+    institution_name = profile.get("institution_name")
+    if not isinstance(institution_name, str) or not institution_name.strip():
+        return api_error("Institution name is required")
+    if len(institution_name.strip()) > 200:
+        return api_error("Institution name must not exceed 200 characters")
+    institution_type = profile.get("institution_type")
+    if institution_type not in (None, "", "public", "private"):
+        return api_error("Institution type must be public or private")
+    need_flags = profile.get("need_flags", [])
+    valid_need_flags = {"orphan", "disability", "low_income", "single_parent"}
+    if not isinstance(need_flags, list) or any(
+        not isinstance(flag, str) or flag not in valid_need_flags for flag in need_flags
+    ):
+        return api_error("Need indicators are invalid")
+
+    with open(
+        os.path.join(os.path.dirname(__file__), "static", "kenya_locations.json"),
+        encoding="utf-8",
+    ) as locations_file:
+        location_map = json.load(locations_file)["counties"]
+    county_value = profile.get("county")
+    constituency_value = profile.get("constituency")
+    if not isinstance(county_value, str) or not isinstance(constituency_value, str):
+        return api_error("A current county and constituency are required")
+    county = next(
+        (name for name in location_map if name.casefold() == county_value.casefold()),
+        None,
+    )
+    if not county:
+        return api_error("Select a valid county")
+    constituency = next(
+        (
+            name for name in location_map[county]
+            if name.casefold() == constituency_value.casefold()
+        ),
+        None,
+    )
+    if not constituency:
+        return api_error("Select a constituency within the selected county")
+
+    opportunity_id = request.form.get("opportunity_id", "").strip()
+    opportunity = get_opportunity_by_id(opportunity_id)
+    if not opportunity:
+        return api_error("Opportunity not found", 404)
+    if opportunity["status"] == "closed":
+        return api_error("Applications are closed for this opportunity", 409)
+
+    profile.update({
+        "institution_name": institution_name.strip(),
+        "institution_type": institution_type or None,
+        "year_of_study": year,
+        "county": county,
+        "constituency": constituency,
+        "need_flags": need_flags,
+    })
+    matched_ids = {
+        item["opportunity"]["id"]
+        for group in match_opportunities(profile).values()
+        for item in group
+    }
+    if opportunity_id not in matched_ids:
+        return api_error(
+            "This opportunity no longer matches the submitted profile. "
+            "Update your profile and find matches again.",
+            409,
+        )
+
+    identity_upload = request.files.get("identity_document")
+    if not identity_upload or not identity_upload.filename:
+        return api_error("A national ID or birth certificate image is required")
+    identity_document_type = request.form.get("identity_document_type")
+    if identity_document_type not in {"national_id", "birth_certificate"}:
+        return api_error("Choose a national ID or birth certificate")
+    passport_upload = request.files.get("passport_document")
+    if passport_upload and not passport_upload.filename:
+        passport_upload = None
+
+    existing = get_connection()
+    try:
+        already_applied = existing.execute(
+            "SELECT 1 FROM applications WHERE user_id=? AND opportunity_id=?",
+            (current_user()["id"], opportunity_id),
+        ).fetchone()
+    finally:
+        existing.close()
+    if already_applied:
+        return api_error("You have already applied for this opportunity", 409)
+
+    try:
+        cipher = document_cipher()
+        identity_image, identity_mime = sanitize_image(identity_upload)
+        passport_image = None
+        passport_mime = None
+        if passport_upload:
+            passport_image, passport_mime = sanitize_image(passport_upload)
+        document_checks = inspect_documents(
+            identity_image,
+            passport_image,
+            current_user()["full_name"],
+        )
+    except InvalidDocument as error:
+        return api_error(str(error))
+    except DocumentProcessingUnavailable as error:
+        app.logger.error("Application document processing is unavailable: %s", error)
+        return api_error(str(error), 503)
+
+    application_id = uuid.uuid4().hex
+    residence_status = (
+        "self_declared_match"
+        if opportunity["counties"] or opportunity["constituencies"]
+        else "unrestricted"
+    )
+    try:
+        with get_connection() as connection:
+            connection.execute(
+                """INSERT INTO applications (
+                    id,user_id,applicant_name,applicant_email,opportunity_id,opportunity_name,
+                    level,institution_type,institution_name,
+                    year_of_study,county,constituency,residence_status,
+                    identity_document_type,identity_document,identity_mime_type,
+                    passport_document,passport_mime_type,identity_ocr_status,
+                    identity_name_status,mrz_status,mrz_name_status,status,created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    application_id,
+                    current_user()["id"],
+                    current_user()["full_name"],
+                    current_user()["email"],
+                    opportunity_id,
+                    opportunity["name"],
+                    level,
+                    institution_type or None,
+                    institution_name.strip(),
+                    year,
+                    county,
+                    constituency,
+                    residence_status,
+                    identity_document_type,
+                    encrypt_document(cipher, identity_image),
+                    identity_mime,
+                    encrypt_document(cipher, passport_image) if passport_image else None,
+                    passport_mime,
+                    document_checks["identity_ocr_status"],
+                    document_checks["identity_name_status"],
+                    document_checks["mrz_status"],
+                    document_checks["mrz_name_status"],
+                    "submitted",
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+    except sqlite3.IntegrityError:
+        return api_error("You have already applied for this opportunity", 409)
+
+    return jsonify({
+        "application_id": application_id,
+        "status": "submitted",
+        "residence_status": residence_status,
+        "document_checks": document_checks,
+    }), 201
+
+
+@app.route("/api/admin/applications")
+@admin_session_required
+def admin_applications():
+    with get_connection() as connection:
+        rows = connection.execute(
+            """SELECT a.id,a.opportunity_id,
+                      COALESCE(o.name,a.opportunity_name) AS opportunity_name,
+                      a.applicant_name AS full_name,a.applicant_email AS email,
+                      a.level,a.institution_name,a.year_of_study,
+                      a.county,a.constituency,a.residence_status,
+                      a.identity_document_type,a.passport_document IS NOT NULL AS has_passport,
+                      a.identity_ocr_status,a.identity_name_status,a.mrz_status,
+                      a.mrz_name_status,a.status,a.created_at
+               FROM applications a
+               LEFT JOIN opportunities o ON o.id=a.opportunity_id
+               ORDER BY a.created_at DESC"""
+        ).fetchall()
+    results = [dict(row) for row in rows]
+    for application in results:
+        if not application["opportunity_name"]:
+            application["opportunity_name"] = "Opportunity no longer in directory"
+    return jsonify(results)
+
+
+@app.route("/api/admin/applications/<application_id>/documents/<document_type>")
+@admin_session_required
+def admin_application_document(application_id, document_type):
+    if document_type not in {"identity", "passport"}:
+        return api_error("Document type not found", 404)
+    column = (
+        "identity_document,identity_mime_type"
+        if document_type == "identity"
+        else "passport_document,passport_mime_type"
+    )
+    with get_connection() as connection:
+        row = connection.execute(
+            f"SELECT {column} FROM applications WHERE id=?",
+            (application_id,),
+        ).fetchone()
+    if not row or not row[0]:
+        return api_error("Document not found", 404)
+    try:
+        content = decrypt_document(document_cipher(), row[0])
+    except DocumentProcessingUnavailable as error:
+        app.logger.error("Application document is unavailable: %s", error)
+        return api_error(str(error), 503)
+    response = app.response_class(content, mimetype=row[1])
+    response.headers["Content-Disposition"] = (
+        f'inline; filename="{document_type}-document.jpg"'
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/admin/applications/<application_id>/status", methods=["POST"])
+@admin_session_required
+def update_application_status(application_id):
+    data = request.get_json(silent=True)
+    allowed_statuses = {"under_review", "approved", "rejected"}
+    status = data.get("status") if isinstance(data, dict) else None
+    if not isinstance(status, str) or status not in allowed_statuses:
+        return api_error("Choose under_review, approved, or rejected")
+    with get_connection() as connection:
+        result = connection.execute(
+            "UPDATE applications SET status=? WHERE id=?",
+            (status, application_id),
+        )
+    if not result.rowcount:
+        return api_error("Application not found", 404)
+    return jsonify({"id": application_id, "status": status})
 
 
 def reminder_text(opportunity, schedule_day, lang):

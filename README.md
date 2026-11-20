@@ -27,7 +27,7 @@ flowchart LR
   Draft -->|Approval| SQLite
 ```
 
-The existing Flask/Jinja frontend is preserved. Public matching is stateless and student profiles are not stored. My Plan is stored only in `localStorage`.
+The existing Flask/Jinja frontend is preserved. Public matching is stateless and profile details are not stored unless the student submits an application. My Plan is stored only in `localStorage`.
 
 ## Run locally
 
@@ -45,6 +45,8 @@ Open `http://127.0.0.1:5000`.
 ## Environment
 
 - `ADMIN_TOKEN`: optional token for direct admin API clients; web admins sign in with an admin account
+- `APPLICATION_DOCUMENT_KEY`: required Fernet key for encrypting retained application document images; keep it backed up and unchanged
+- `TESSERACT_CMD`: optional path to the Tesseract OCR executable when it is not on `PATH`
 - `DATABASE_URL`: reserved for a future SQLAlchemy/PostgreSQL backend
 - `CORS_ORIGINS`: comma-separated allowed browser origins
 - `LLM_PROVIDER=mock`: deterministic offline Notice Reader
@@ -63,6 +65,8 @@ Open `http://127.0.0.1:5000`.
 - `POST /api/feedback`
 - `POST /api/events`
 - `GET|POST /api/poll`
+- `POST /api/applications`: submits a matched bursary application for a signed-in student
+- `/api/admin/applications*`: admin-session-only application listing, document viewing, and status updates
 - `POST /api/admin/bursaries`: creates a validated bursary using an authenticated admin session
 - `/api/admin/*`: admin APIs accept an admin login session or, where supported, `X-Admin-Token`; the bursary upload endpoint requires the session
 
@@ -78,17 +82,29 @@ python -m pytest -q
 
 The tests cover confidence, public/private matching, county and constituency restrictions, reminder schedules, removed features, role-based admin access, bursary validation and admin authentication.
 
+### Student applications and document processing
+
+Students can apply from personalized results. The application confirms the current county and constituency from the matching profile and checks those values against the bursary's county/constituency restrictions. This is a self-declared location match, not proof of residence. Kenyan ID and birth-certificate images are OCR-screened and retained encrypted in SQLite for admin review; an optional passport image is OCR-scanned for ICAO TD3 MRZ checks. OCR/MRZ results are advisory and require human review. ID cards and birth certificates generally do not have an MRZ, and an MRZ cannot establish current residence.
+
+Install Tesseract OCR on local hosts (and put its executable on `PATH`, or set `TESSERACT_CMD`). Render installs the Tesseract system package during build. Generate an application-document key with:
+
+```powershell
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Set that value as `APPLICATION_DOCUMENT_KEY` in `.env` and in the deployment environment. Back it up securely: losing or changing the key makes retained application images unreadable. Only authenticated admin sessions can list applications or view the retained documents.
+
 ## Deploy on Render
 
 1. Push the project to a Git repository.
 2. Create a Python Web Service from the repository.
 3. Render will read `render.yaml`.
-4. Set `SECRET_KEY`, `CORS_ORIGINS` and `APP_ENV=production`. Set `ADMIN_TOKEN` only if direct API-token access is required.
+4. Set `SECRET_KEY`, `APPLICATION_DOCUMENT_KEY`, `CORS_ORIGINS` and `APP_ENV=production`. Set `ADMIN_TOKEN` only if direct API-token access is required.
 5. Use `gunicorn app:app --bind 0.0.0.0:$PORT` as the start command.
 
 ## SQLite and redeployment
 
-Render's default disk is ephemeral. SQLite edits and verification dates may disappear on redeploy.
+Render's default disk is ephemeral. SQLite edits, applications, retained documents and verification dates may disappear on redeploy.
 Export reviewed data with `GET /api/admin/export` as a backup, or configure a persistent PostgreSQL database. The application no longer seeds opportunity records on startup.
 
 ## Seed and verification
@@ -103,4 +119,4 @@ See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEM
 - The database is local unless migrated to a hosted database.
 - SMS delivery is a preview only; no phone number is collected.
 - Mock Notice Reader output requires human review and is not an extraction engine.
-- No student profile is written to disk.
+- Student matching profiles are not stored unless submitted with an application.

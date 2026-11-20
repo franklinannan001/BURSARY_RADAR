@@ -4,6 +4,8 @@ const bursaryList = document.querySelector("#bursaryList");
 const countySelect = document.querySelector("#bursaryCounties");
 const constituencySelect = document.querySelector("#bursaryConstituencies");
 const submitButton = document.querySelector("#submitBursary");
+const applicationList = document.querySelector("#applicationList");
+const applicationAdminStatus = document.querySelector("#applicationAdminStatus");
 let countyLocations = {};
 
 function showStatus(message, kind = "") {
@@ -118,6 +120,94 @@ async function loadBursaries() {
   }
 }
 
+async function loadApplications() {
+  applicationList.textContent = "Loading applications...";
+  try {
+    const response = await fetch("/api/admin/applications");
+    if (!response.ok) throw new Error(await responseError(response));
+    const applications = await response.json();
+    applicationList.replaceChildren();
+    if (!applications.length) {
+      applicationList.textContent = "No applications have been submitted.";
+      return;
+    }
+
+    applications.forEach((application) => {
+      const card = document.createElement("article");
+      card.className = "admin-bursary-card";
+      const title = document.createElement("h3");
+      title.textContent = `${application.full_name} — ${application.opportunity_name}`;
+      const applicant = document.createElement("p");
+      applicant.textContent = `${application.email} · ${application.level}, year ${application.year_of_study} · ${application.institution_name}`;
+      const location = document.createElement("p");
+      location.textContent =
+        `Residence: ${application.county}, ${application.constituency} ` +
+        `(${application.residence_status.replaceAll("_", " ")})`;
+      const checks = document.createElement("p");
+      checks.textContent =
+        `ID OCR: ${application.identity_ocr_status}; name: ${application.identity_name_status}; ` +
+        `Passport MRZ: ${application.mrz_status}; MRZ name: ${application.mrz_name_status}`;
+      const status = document.createElement("p");
+      status.textContent = `Status: ${application.status} · Submitted ${application.created_at}`;
+      const identityLink = document.createElement("a");
+      identityLink.href =
+        `/api/admin/applications/${encodeURIComponent(application.id)}/documents/identity`;
+      identityLink.target = "_blank";
+      identityLink.rel = "noopener noreferrer";
+      identityLink.textContent = `View ${application.identity_document_type.replaceAll("_", " ")}`;
+      card.append(title, applicant, location, checks, status, identityLink);
+
+      if (application.has_passport) {
+        const passportLink = document.createElement("a");
+        passportLink.href =
+          `/api/admin/applications/${encodeURIComponent(application.id)}/documents/passport`;
+        passportLink.target = "_blank";
+        passportLink.rel = "noopener noreferrer";
+        passportLink.textContent = "View passport";
+        card.appendChild(passportLink);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "admin-application-actions";
+      [
+        ["under_review", "Under review"],
+        ["approved", "Approve"],
+        ["rejected", "Reject"],
+      ].forEach(([value, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.disabled = application.status === value;
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const update = await fetch(
+              `/api/admin/applications/${encodeURIComponent(application.id)}/status`,
+              {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({status: value}),
+              },
+            );
+            if (!update.ok) throw new Error(await responseError(update));
+            applicationAdminStatus.textContent = "Application status updated.";
+            await loadApplications();
+          } catch (error) {
+            applicationAdminStatus.textContent =
+              error.message || "Could not update application status.";
+            button.disabled = false;
+          }
+        });
+        actions.appendChild(button);
+      });
+      card.appendChild(actions);
+      applicationList.appendChild(card);
+    });
+  } catch (error) {
+    applicationList.textContent = error.message || "Could not load applications.";
+  }
+}
+
 bursaryForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedValues("levels").length) {
@@ -179,6 +269,7 @@ bursaryForm.addEventListener("submit", async (event) => {
 
 countySelect.addEventListener("change", refreshConstituencies);
 document.querySelector("#refreshBursaries").addEventListener("click", loadBursaries);
+document.querySelector("#refreshApplications").addEventListener("click", loadApplications);
 
 loadCountyOptions().catch((error) => {
   countySelect.disabled = true;
@@ -186,3 +277,4 @@ loadCountyOptions().catch((error) => {
   showStatus(error.message, "error");
 });
 loadBursaries();
+loadApplications();

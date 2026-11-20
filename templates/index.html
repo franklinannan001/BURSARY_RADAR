@@ -51,7 +51,7 @@
       <div>
         <span class="eyebrow" data-i18n="hero.eyebrow">KENYAN STUDENT FUNDING GUIDE</span>
         <h1 data-i18n="hero.title">Find funding you can apply for.</h1>
-        <p data-i18n="hero.copy">A private, browser-first way to understand opportunities and prepare before deadlines.</p>
+        <p data-i18n="hero.copy">A browser-first way to find funding opportunities and prepare to apply.</p>
         <button id="sampleButton" class="primary-button hero-button" type="button" data-i18n="hero.sample">Try as a sample student</button>
       </div>
       <div class="hero-card" aria-label="Opportunity listings" data-i18n-aria-label="hero.listings_aria"><strong id="opportunityCount">0</strong><span data-i18n="hero.opportunity_count">opportunities in directory</span></div>
@@ -85,7 +85,7 @@
             </div>
           </div>
           <div class="wizard-step" data-step="5">
-            <p data-i18n="profile.review_note">Review your profile, then request matches. No identifying data is stored.</p>
+            <p data-i18n="profile.review_note">Review your profile, then request matches. Details are stored only if you submit an application.</p>
             <div id="profileReview"></div>
           </div>
           <div class="wizard-actions">
@@ -123,7 +123,7 @@
             <p><strong data-i18n="verify.amber_label">Amber:</strong> <span data-i18n="verify.amber">Credible secondary source, or an older official source, or a confirmed opportunity with no deadline.</span></p>
             <p><strong data-i18n="verify.red_label">Red:</strong> <span data-i18n="verify.red">Never verified or sourced from an aggregator/other source.</span></p>
           </div>
-          <p data-i18n="verify.ai">AI extraction, if used, creates drafts for human review. It never publishes automatically. No profile details are stored.</p>
+          <p data-i18n="verify.ai">AI extraction, if used, creates drafts for human review and never publishes automatically. Application details are stored only when submitted.</p>
         </section>
       </div>
     </section>
@@ -133,6 +133,35 @@
       <textarea id="feedbackComment" maxlength="300" placeholder="Optional feedback (300 characters maximum)" data-i18n-placeholder="feedback.placeholder"></textarea>
       <button id="feedbackSubmit" class="secondary-button" type="button" data-i18n="feedback.send">Send feedback</button>
     </section>
+    <dialog id="applicationDialog" class="application-dialog" aria-labelledby="applicationTitle">
+      <form id="applicationForm" enctype="multipart/form-data">
+        <button id="closeApplication" class="outline-button application-close" type="button" data-i18n="application.cancel">Cancel</button>
+        <h2 id="applicationTitle" data-i18n="application.title">Apply for this bursary</h2>
+        <p id="applicationOpportunityName" class="application-opportunity"></p>
+        <p><span data-i18n="application.applicant">Applicant</span>: <strong>{{ user["full_name"] }}</strong> · {{ user["email"] }}</p>
+        <dl id="applicationProfile" class="application-profile"></dl>
+        <p class="application-note" data-i18n="application.location_note">County and constituency are self-declared and checked against the bursary's location rules. Identity documents do not prove current residence.</p>
+        <label><span data-i18n="application.document_type">Required identity document</span>
+          <select name="identity_document_type" required>
+            <option value="national_id" data-i18n="application.national_id">National ID</option>
+            <option value="birth_certificate" data-i18n="application.birth_certificate">Birth certificate</option>
+          </select>
+        </label>
+        <label><span data-i18n="application.identity_file">Upload a clear ID or birth certificate image (JPEG or PNG)</span>
+          <input name="identity_document" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
+        </label>
+        <label><span data-i18n="application.passport_file">Passport image (optional, for MRZ parsing)</span>
+          <input name="passport_document" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+        </label>
+        <p class="application-note" data-i18n="application.review_note">OCR and MRZ results are screening aids, not proof of identity or residence. Authorized officials can review retained uploads.</p>
+        <label class="application-confirmation"><input name="residence_confirmed" type="checkbox" value="yes" required> <span data-i18n="application.confirm_location">I confirm that I currently live in the county and constituency shown above.</span></label>
+        <p id="applicationError" class="application-status" role="status" aria-live="polite"></p>
+        <input name="opportunity_id" type="hidden">
+        <input name="profile" type="hidden">
+        <button id="submitApplication" class="primary-button" type="submit" data-i18n="application.submit">Submit application</button>
+      </form>
+    </dialog>
+    <p id="applicationStatus" class="application-status" role="status" aria-live="polite"></p>
     {% endif %}
   </main>
 
