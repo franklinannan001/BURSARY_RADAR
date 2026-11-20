@@ -127,3 +127,4 @@ See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEM
 - SMS reminder scheduling is preview-only. Application confirmations and new matching bursary alerts use Infobip when configured.
 - Mock Notice Reader output requires human review and is not an extraction engine.
 - Student matching profiles are not stored unless submitted with an application.
+thank you
