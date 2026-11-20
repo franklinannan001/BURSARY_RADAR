@@ -47,6 +47,8 @@ Open `http://127.0.0.1:5000`.
 - `ADMIN_TOKEN`: optional token for direct admin API clients; web admins sign in with an admin account
 - `APPLICATION_DOCUMENT_KEY`: required Fernet key for encrypting retained application document images; keep it backed up and unchanged
 - `TESSERACT_CMD`: optional path to the Tesseract OCR executable when it is not on `PATH`
+- `INFOBIP_BASE_URL`, `INFOBIP_API_KEY`: Infobip HTTPS base host and API key; configure in ignored local `.env` or deployment secrets, never in source control
+- `INFOBIP_SENDER_ID`: Infobip-approved SMS sender ID; the example value is only a placeholder
 - `DATABASE_URL`: reserved for a future SQLAlchemy/PostgreSQL backend
 - `CORS_ORIGINS`: comma-separated allowed browser origins
 - `LLM_PROVIDER=mock`: deterministic offline Notice Reader
@@ -67,6 +69,7 @@ Open `http://127.0.0.1:5000`.
 - `GET|POST /api/poll`
 - `POST /api/applications`: submits a matched bursary application for a signed-in student
 - `/api/admin/applications*`: admin-session-only application listing, document viewing, and status updates
+- Infobip sends an SMS confirmation after an application is stored and alerts opted-in students when an admin publishes an open/upcoming bursary matching their saved area and study profile
 - `POST /api/admin/bursaries`: creates a validated bursary using an authenticated admin session
 - `/api/admin/*`: admin APIs accept an admin login session or, where supported, `X-Admin-Token`; the bursary upload endpoint requires the session
 
@@ -85,6 +88,10 @@ The tests cover confidence, public/private matching, county and constituency res
 ### Student applications and document processing
 
 Students can apply from personalized results. The application confirms the current county and constituency from the matching profile and checks those values against the bursary's county/constituency restrictions. This is a self-declared location match, not proof of residence. Kenyan ID and birth-certificate images are OCR-screened and retained encrypted in SQLite for admin review; an optional passport image is OCR-scanned for ICAO TD3 MRZ checks. OCR/MRZ results are advisory and require human review. ID cards and birth certificates generally do not have an MRZ, and an MRZ cannot establish current residence.
+
+Student signup requires a valid Kenyan mobile number and SMS consent. The number is normalized to E.164. When an opted-in student searches, their county, constituency, study level and relevant institution details are saved to target matching bursary alerts; optional need indicators are not stored. SMS is outbound only; inbound replies are not configured. If Infobip is unavailable, the application remains saved and the UI clearly reports that its confirmation SMS was not accepted. The admin bursary upload is also preserved if an alert send fails.
+
+Set `INFOBIP_BASE_URL` to the HTTPS Infobip API host, `INFOBIP_API_KEY` to a secret, and `INFOBIP_SENDER_ID` to a sender approved for your account/route. The example sender is a placeholder and may not be accepted by Infobip. Provider acceptance is not a guarantee of handset delivery. Never commit `.env`; rotate any API key pasted into chats or otherwise exposed before production use.
 
 Install Tesseract OCR on local hosts (and put its executable on `PATH`, or set `TESSERACT_CMD`). Render installs the Tesseract system package during build. Generate an application-document key with:
 
@@ -117,6 +124,6 @@ See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEM
 
 - Award amounts and application windows may change.
 - The database is local unless migrated to a hosted database.
-- SMS delivery is a preview only; no phone number is collected.
+- SMS reminder scheduling is preview-only. Application confirmations and new matching bursary alerts use Infobip when configured.
 - Mock Notice Reader output requires human review and is not an extraction engine.
 - Student matching profiles are not stored unless submitted with an application.

@@ -145,6 +145,21 @@ def init_db():
                 UNIQUE(user_id, opportunity_id)
             )
         """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS sms_notifications (
+                id TEXT PRIMARY KEY,
+                dedupe_key TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                opportunity_id TEXT,
+                application_id TEXT,
+                status TEXT NOT NULL,
+                provider_message_id TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id,event_type,opportunity_id,application_id)
+            )
+        """)
         application_columns = {
             row[1]
             for row in connection.execute("PRAGMA table_info(applications)").fetchall()

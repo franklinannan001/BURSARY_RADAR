@@ -44,7 +44,7 @@ const translations = {
     "profile.select_county_first": "Select a county first",
     "profile.select_constituency": "Select a constituency",
     "profile.optional_needs": "Optional need indicators",
-    "profile.needs_note": "Optional. These indicators are sent only to the matching API and are never stored.",
+    "profile.needs_note": "Optional need indicators are sent only to matching and are never stored. Your county, constituency and study level are saved for SMS bursary alerts.",
     "profile.orphan": "Orphan",
     "profile.disability": "Disability",
     "profile.low_income": "Low income",
@@ -112,6 +112,10 @@ const translations = {
     "application.success": "Application submitted for {opportunity}.",
     "application.submitted": "Applied",
     "application.profile_missing": "Find opportunities with your profile before applying.",
+    "application.sms_accepted": "Infobip accepted an SMS confirmation for delivery.",
+    "application.sms_failed": "The application was saved, but the SMS confirmation could not be sent.",
+    "application.sms_not_configured": "The application was saved, but SMS is not configured.",
+    "application.sms_skipped": "The application was saved, but this account has no notification-ready mobile number.",
     "plan.eyebrow": "MY PLAN",
     "plan.title": "Saved opportunities",
     "plan.empty": "Nothing saved yet. Use “Add to my plan” on an opportunity.",
@@ -198,7 +202,7 @@ const translations = {
     "profile.select_county_first": "Chagua kaunti kwanza",
     "profile.select_constituency": "Chagua eneo bunge",
     "profile.optional_needs": "Viashiria vya mahitaji (hiari)",
-    "profile.needs_note": "Hiari. Viashiria hivi hutumwa kwa API ya ulinganishaji pekee na havihifadhiwi.",
+    "profile.needs_note": "Viashiria vya mahitaji ni hiari, hutumwa kwa ulinganishaji pekee na havihifadhiwi. Kaunti, eneo bunge na kiwango chako cha masomo huhifadhiwa kwa arifa za SMS za ufadhili.",
     "profile.orphan": "Yatima",
     "profile.disability": "Ulemavu",
     "profile.low_income": "Kipato cha chini",
@@ -266,6 +270,10 @@ const translations = {
     "application.success": "Ombi la {opportunity} limewasilishwa.",
     "application.submitted": "Umeomba",
     "application.profile_missing": "Tafuta fursa kwa kutumia wasifu wako kabla ya kutuma ombi.",
+    "application.sms_accepted": "Infobip imekubali ujumbe wa uthibitisho wa SMS utumwe.",
+    "application.sms_failed": "Ombi limehifadhiwa, lakini uthibitisho wa SMS haukuweza kutumwa.",
+    "application.sms_not_configured": "Ombi limehifadhiwa, lakini SMS haijasanidiwa.",
+    "application.sms_skipped": "Ombi limehifadhiwa, lakini akaunti hii haina nambari ya simu iliyo tayari kwa arifa.",
     "plan.eyebrow": "MPANGO WANGU",
     "plan.title": "Fursa zilizohifadhiwa",
     "plan.empty": "Bado hakuna kilichohifadhiwa. Tumia “Ongeza kwenye mpango wangu” kwenye fursa.",
@@ -667,6 +675,12 @@ if (applicationForm) {
         throw new Error(body.error?.message || `Request failed (${response.status})`);
       }
       const opportunityName = document.querySelector("#applicationOpportunityName").textContent;
+      const notificationKey = {
+        accepted: "application.sms_accepted",
+        failed: "application.sms_failed",
+        not_configured: "application.sms_not_configured",
+        skipped: "application.sms_skipped",
+      }[body.notification?.status] || "application.sms_failed";
       const appliedId = formData.get("opportunity_id");
       document.querySelectorAll(".match-card").forEach((card) => {
         if (card.dataset.opportunityId === appliedId) {
@@ -678,7 +692,9 @@ if (applicationForm) {
       dialog.close();
       applicationForm.reset();
       const status = document.querySelector("#applicationStatus");
-      status.textContent = t("application.success", {opportunity: opportunityName});
+      status.textContent =
+        `${t("application.success", {opportunity: opportunityName})} ` +
+        t(notificationKey);
       status.className = "application-status success";
     } catch (error) {
       document.querySelector("#applicationError").textContent =

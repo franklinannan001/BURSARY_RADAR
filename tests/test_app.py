@@ -232,6 +232,8 @@ def test_signup_study_level_and_grade_or_course():
     client = app.test_client()
     signup_page = client.get("/signup")
     assert b'name="study_level"' in signup_page.data
+    assert b'name="phone_number"' in signup_page.data
+    assert b'name="sms_consent"' in signup_page.data
     assert b'id="courseSelect"' in signup_page.data
     assert b'id="customCourseField"' in signup_page.data
     styles = Path(__file__).resolve().parents[1] / "static" / "styles.css"
@@ -255,6 +257,8 @@ def test_signup_study_level_and_grade_or_course():
                 "full_name": "Signup Test",
                 "email": email,
                 "password": "secure123",
+                "phone_number": "+254712345678",
+                "sms_consent": "yes",
                 "study_level": level,
                 "course": course,
                 "custom_course": custom_course,
@@ -262,15 +266,17 @@ def test_signup_study_level_and_grade_or_course():
             assert response.status_code == 302
             with sqlite3.connect(DB_PATH) as connection:
                 row = connection.execute(
-                    "SELECT study_level,course FROM users WHERE email=?",
+                    "SELECT study_level,course,phone_number,sms_consent FROM users WHERE email=?",
                     (email,),
                 ).fetchone()
-            assert row == (level, expected_course)
+            assert row == (level, expected_course, "+254712345678", 1)
 
         invalid_response = client.post("/signup", data={
             "full_name": "Signup Test",
             "email": f"invalid-{suffix}@example.com",
             "password": "secure123",
+            "phone_number": "+254712345678",
+            "sms_consent": "yes",
             "study_level": "Primary",
             "course": "Grade 7",
         })
@@ -279,6 +285,104 @@ def test_signup_study_level_and_grade_or_course():
     finally:
         with sqlite3.connect(DB_PATH) as connection:
             connection.executemany("DELETE FROM users WHERE email=?", [(email,) for email in emails])
+
+
+def test_student_signup_requires_valid_kenyan_mobile_and_sms_consent():
+    client = app.test_client()
+    suffix = uuid.uuid4().hex
+    email = f"mobile-{suffix}@example.com"
+    base = {
+        "account_type": "student",
+        "full_name": "Mobile Test Student",
+        "email": email,
+        "password": "secure123",
+        "study_level": "Primary",
+        "course": "Grade 1",
+    }
+    try:
+        missing_phone = client.post("/signup", data={**base, "sms_consent": "yes"})
+        assert missing_phone.status_code == 200
+        assert b"valid Kenyan mobile number" in missing_phone.data
+
+        invalid_phone = client.post("/signup", data={
+            **base,
+            "phone_number": "12345",
+            "sms_consent": "yes",
+        })
+        assert invalid_phone.status_code == 200
+        assert b"valid Kenyan mobile number" in invalid_phone.data
+
+        no_consent = client.post("/signup", data={
+            **base,
+            "phone_number": "0712 345 678",
+        })
+        assert no_consent.status_code == 200
+        assert b"Consent to SMS updates is required" in no_consent.data
+
+        created = client.post("/signup", data={
+            **base,
+            "phone_number": "0712 345 678",
+            "sms_consent": "yes",
+        })
+        assert created.status_code == 302
+        with sqlite3.connect(DB_PATH) as connection:
+            row = connection.execute(
+                "SELECT phone_number,sms_consent FROM users WHERE email=?",
+                (email,),
+            ).fetchone()
+        assert row == ("+254712345678", 1)
+    finally:
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute("DELETE FROM users WHERE email=?", (email,))
+
+
+def test_infobip_sender_uses_https_and_reports_provider_acceptance(monkeypatch):
+    import json
+    import sms_service
+
+    monkeypatch.setenv("INFOBIP_BASE_URL", "jrxjzk.api.infobip.com")
+    monkeypatch.setenv("INFOBIP_API_KEY", "unit-test-key")
+    monkeypatch.setenv("INFOBIP_SENDER_ID", "TestSender")
+
+    class MockResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "messages": [{
+                    "messageId": "provider-id",
+                    "status": {"groupName": "PENDING"},
+                }]
+            }).encode()
+
+    def fake_urlopen(request, timeout):
+        assert request.full_url == "https://jrxjzk.api.infobip.com/sms/3/messages"
+        assert request.get_header("Authorization") == "App unit-test-key"
+        assert timeout == 10
+        payload = json.loads(request.data)
+        assert payload["messages"][0]["destinations"] == [
+            {"to": "+254712345678"}
+        ]
+        assert payload["messages"][0]["sender"] == "TestSender"
+        return MockResponse()
+
+    monkeypatch.setattr(sms_service, "urlopen", fake_urlopen)
+    assert sms_service.send_infobip_sms("+254712345678", "Test message") == "provider-id"
+
+
+def test_infobip_rejects_non_infobip_hosts_before_sending(monkeypatch):
+    import pytest
+    import sms_service
+
+    monkeypatch.setenv("INFOBIP_BASE_URL", "https://attacker.example")
+    monkeypatch.setenv("INFOBIP_API_KEY", "unit-test-key")
+    monkeypatch.setenv("INFOBIP_SENDER_ID", "TestSender")
+    with pytest.raises(sms_service.SMSConfigurationError):
+        sms_service.send_infobip_sms("+254712345678", "Test message")
 
 
 def test_admin_accounts_require_go_ke_and_role_is_checked_on_login():
@@ -335,6 +439,8 @@ def test_admin_accounts_require_go_ke_and_role_is_checked_on_login():
             "full_name": "Student Test",
             "email": student_email,
             "password": "secure123",
+            "phone_number": "+254712345678",
+            "sms_consent": "yes",
             "study_level": "Primary",
             "course": "Grade 1",
         })
@@ -355,6 +461,8 @@ def test_admin_accounts_require_go_ke_and_role_is_checked_on_login():
             "full_name": "Legacy Official",
             "email": legacy_official_email,
             "password": "secure123",
+            "phone_number": "+254712345678",
+            "sms_consent": "yes",
             "study_level": "Primary",
             "course": "Grade 1",
         })
@@ -547,6 +655,12 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
             "mrz_name_status": "not_checked",
         },
     )
+    sent_messages = []
+    monkeypatch.setattr(
+        app_module,
+        "send_infobip_sms",
+        lambda phone, text: sent_messages.append((phone, text)) or "mock-message-id",
+    )
     opportunity_id = None
     application_id = None
     try:
@@ -567,6 +681,8 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
             "full_name": "Student Applicant",
             "email": student_email,
             "password": "secure123",
+            "phone_number": "+254712345678",
+            "sms_consent": "yes",
             "study_level": "Primary",
             "course": "Grade 1",
         }).status_code == 302
@@ -580,9 +696,28 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
         assert b'id="applicationDialog"' in dashboard.data
         assert b"Student Applicant" in dashboard.data
 
+        profile = {
+            "level": "Primary",
+            "institution_type": "public",
+            "institution_name": "Mwala Primary School",
+            "year_of_study": 1,
+            "county": "Machakos",
+            "constituency": "Mwala",
+            "need_flags": [],
+        }
+        assert student_client.post("/api/match", json=profile).status_code == 200
+        with sqlite3.connect(DB_PATH) as connection:
+            preference = connection.execute(
+                """SELECT notification_county,notification_constituency,
+                          notification_level
+                   FROM users WHERE email=?""",
+                (student_email,),
+            ).fetchone()
+        assert preference == ("Machakos", "Mwala", "Primary")
+
         start = datetime.now(timezone.utc).date() + timedelta(days=60)
         end = start + timedelta(days=180)
-        uploaded = admin_client.post("/api/admin/bursaries", json={
+        bursary_payload = {
             "name": f"Application Test Bursary {suffix}",
             "provider": "Machakos County Government",
             "provider_type": "county_government",
@@ -610,22 +745,25 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
             "how_to_apply": "Submit online.",
             "apply_url": "https://machakos.go.ke/apply",
             "source_url": "https://machakos.go.ke/bursaries",
-        })
+        }
+        uploaded = admin_client.post("/api/admin/bursaries", json=bursary_payload)
         assert uploaded.status_code == 201
         opportunity_id = uploaded.get_json()["id"]
+        assert len(sent_messages) == 1
+        assert "Machakos County Government" in sent_messages[0][1]
+        assert "Mwala" in sent_messages[0][1]
+        with sqlite3.connect(DB_PATH) as connection:
+            alert = connection.execute(
+                """SELECT status FROM sms_notifications
+                   WHERE user_id=(SELECT id FROM users WHERE email=?)
+                     AND event_type='bursary_alert' AND opportunity_id=?""",
+                (student_email, opportunity_id),
+            ).fetchone()
+        assert alert == ("accepted",)
 
         image_buffer = BytesIO()
         Image.new("RGB", (40, 40), "white").save(image_buffer, format="PNG")
         image_bytes = image_buffer.getvalue()
-        profile = {
-            "level": "Primary",
-            "institution_type": "public",
-            "institution_name": "Mwala Primary School",
-            "year_of_study": 1,
-            "county": "Machakos",
-            "constituency": "Mwala",
-            "need_flags": [],
-        }
 
         def submission(profile_data):
             return {
@@ -664,6 +802,9 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
         application_id = result["application_id"]
         assert result["residence_status"] == "self_declared_match"
         assert result["document_checks"]["identity_name_status"] == "matched"
+        assert result["notification"]["status"] == "accepted"
+        assert len(sent_messages) == 2
+        assert "application" in sent_messages[1][1].lower()
 
         with sqlite3.connect(DB_PATH) as connection:
             encrypted_image = connection.execute(
@@ -698,6 +839,39 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
             content_type="multipart/form-data",
         )
         assert duplicate.status_code == 409
+
+        monkeypatch.setattr(
+            app_module,
+            "send_infobip_sms",
+            lambda phone, text: (_ for _ in ()).throw(
+                app_module.SMSDeliveryError("Infobip request failed.")
+            ),
+        )
+        second_upload = admin_client.post(
+            "/api/admin/bursaries",
+            json={**bursary_payload, "name": f"Second Application Test Bursary {suffix}"},
+        )
+        assert second_upload.status_code == 201
+        second_opportunity_id = second_upload.get_json()["id"]
+        second_response = student_client.post(
+            "/api/applications",
+            data={
+                **submission(profile),
+                "opportunity_id": second_opportunity_id,
+            },
+            content_type="multipart/form-data",
+        )
+        assert second_response.status_code == 201
+        second_result = second_response.get_json()
+        assert second_result["status"] == "submitted"
+        assert second_result["notification"]["status"] == "failed"
+        with sqlite3.connect(DB_PATH) as connection:
+            stored_after_sms_failure = connection.execute(
+                "SELECT 1 FROM applications WHERE id=?",
+                (second_result["application_id"],),
+            ).fetchone()
+        assert stored_after_sms_failure == (1,)
+
         updated = admin_client.post(
             f"/api/admin/applications/{application_id}/status",
             json={"status": "under_review"},
@@ -717,8 +891,34 @@ def test_student_application_matching_encrypted_documents_and_admin_review(monke
                     (opportunity_id,),
                 )
                 connection.execute(
+                    "DELETE FROM sms_notifications WHERE opportunity_id=?",
+                    (opportunity_id,),
+                )
+                connection.execute(
                     "DELETE FROM opportunities WHERE id=?",
                     (opportunity_id,),
+                )
+            if "second_opportunity_id" in locals():
+                connection.execute(
+                    "DELETE FROM applications WHERE opportunity_id=?",
+                    (second_opportunity_id,),
+                )
+                connection.execute(
+                    "DELETE FROM sms_notifications WHERE opportunity_id=?",
+                    (second_opportunity_id,),
+                )
+                connection.execute(
+                    "DELETE FROM opportunities WHERE id=?",
+                    (second_opportunity_id,),
+                )
+            user_row = connection.execute(
+                "SELECT id FROM users WHERE email=?",
+                (student_email,),
+            ).fetchone()
+            if user_row:
+                connection.execute(
+                    "DELETE FROM sms_notifications WHERE user_id=?",
+                    (user_row[0],),
                 )
             connection.execute(
                 "DELETE FROM users WHERE email IN (?,?)",

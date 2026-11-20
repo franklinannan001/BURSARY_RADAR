@@ -13,3 +13,9 @@ services:
         sync: false
       - key: APPLICATION_DOCUMENT_KEY
         sync: false
+      - key: INFOBIP_BASE_URL
+        value: https://jrxjzk.api.infobip.com
+      - key: INFOBIP_API_KEY
+        sync: false
+      - key: INFOBIP_SENDER_ID
+        value: BursaryRadar

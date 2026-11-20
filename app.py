@@ -23,6 +23,12 @@ from application_documents import (
     inspect_documents,
     sanitize_image,
 )
+from sms_service import (
+    SMSConfigurationError,
+    SMSDeliveryError,
+    normalize_kenyan_mobile,
+    send_infobip_sms,
+)
 from bursary_model import (
     DB_PATH,
     get_connection,
@@ -55,7 +61,14 @@ def init_users_db():
                 date_of_birth TEXT,
                 course TEXT,
                 study_level TEXT,
-                role TEXT NOT NULL DEFAULT 'student'
+                role TEXT NOT NULL DEFAULT 'student',
+                phone_number TEXT,
+                sms_consent INTEGER NOT NULL DEFAULT 0,
+                notification_county TEXT,
+                notification_constituency TEXT,
+                notification_level TEXT,
+                notification_institution_type TEXT,
+                notification_institution_name TEXT
             )
         """)
         columns = {row[1] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
@@ -67,6 +80,20 @@ def init_users_db():
             connection.execute(
                 "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"
             )
+        user_migrations = {
+            "phone_number": "TEXT",
+            "sms_consent": "INTEGER NOT NULL DEFAULT 0",
+            "notification_county": "TEXT",
+            "notification_constituency": "TEXT",
+            "notification_level": "TEXT",
+            "notification_institution_type": "TEXT",
+            "notification_institution_name": "TEXT",
+        }
+        for column, column_type in user_migrations.items():
+            if column not in columns:
+                connection.execute(
+                    f"ALTER TABLE users ADD COLUMN {column} {column_type}"
+                )
 
 
 init_users_db()
@@ -79,7 +106,9 @@ def current_user():
     with sqlite3.connect(USERS_DB) as connection:
         connection.row_factory = sqlite3.Row
         return connection.execute(
-            "SELECT id, full_name, enrollment_no, email, course, study_level, role FROM users WHERE id=?",
+            """SELECT id,full_name,enrollment_no,email,course,study_level,role,
+                      phone_number,sms_consent
+               FROM users WHERE id=?""",
             (user_id,),
         ).fetchone()
 
@@ -186,6 +215,198 @@ def student_session_required(view):
     return wrapped
 
 
+def save_notification_preferences(user_id, profile):
+    with open(
+        os.path.join(os.path.dirname(__file__), "static", "kenya_locations.json"),
+        encoding="utf-8",
+    ) as locations_file:
+        county_map = json.load(locations_file)["counties"]
+    county_value = profile.get("county")
+    constituency_value = profile.get("constituency")
+    if not isinstance(county_value, str) or not isinstance(constituency_value, str):
+        return
+    county = next(
+        (name for name in county_map if name.casefold() == county_value.casefold()),
+        None,
+    )
+    if not county:
+        return
+    constituency = next(
+        (
+            name for name in county_map[county]
+            if name.casefold() == constituency_value.casefold()
+        ),
+        None,
+    )
+    if not constituency:
+        return
+    with get_connection() as connection:
+        connection.execute(
+            """UPDATE users
+               SET notification_county=?,notification_constituency=?,
+                   notification_level=?,notification_institution_type=?,
+                   notification_institution_name=?
+               WHERE id=? AND role='student' AND sms_consent=1 AND phone_number IS NOT NULL""",
+            (
+                county,
+                constituency,
+                profile.get("level"),
+                profile.get("institution_type"),
+                str(profile.get("institution_name", "")).strip()[:200] or None,
+                user_id,
+            ),
+        )
+
+
+def send_user_sms(
+    user_id,
+    phone_number,
+    sms_consent,
+    event_type,
+    dedupe_key,
+    message,
+    opportunity_id=None,
+    application_id=None,
+):
+    notification_id = uuid.uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
+    initial_status = "pending" if sms_consent and phone_number else "skipped"
+    initial_error = None
+    if not sms_consent:
+        initial_error = "Student has not consented to SMS notifications."
+    elif not phone_number:
+        initial_error = "No mobile number is registered."
+    with get_connection() as connection:
+        existing = connection.execute(
+            "SELECT status FROM sms_notifications WHERE dedupe_key=?",
+            (dedupe_key,),
+        ).fetchone()
+        if existing:
+            return {"status": existing["status"]}
+        connection.execute(
+            """INSERT INTO sms_notifications
+               (id,dedupe_key,user_id,event_type,opportunity_id,application_id,
+                status,error,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                notification_id,
+                dedupe_key,
+                user_id,
+                event_type,
+                opportunity_id,
+                application_id,
+                initial_status,
+                initial_error,
+                created_at,
+            ),
+        )
+    if initial_status == "skipped":
+        return {"status": "skipped"}
+
+    try:
+        provider_message_id = send_infobip_sms(phone_number, message)
+    except SMSConfigurationError as error:
+        status = "not_configured"
+        detail = str(error)
+        app.logger.error("SMS notification %s was not sent: %s", notification_id, detail)
+    except SMSDeliveryError as error:
+        status = "failed"
+        detail = str(error)
+        app.logger.warning("SMS notification %s failed: %s", notification_id, detail)
+    else:
+        status = "accepted"
+        detail = None
+    with get_connection() as connection:
+        connection.execute(
+            """UPDATE sms_notifications
+               SET status=?,provider_message_id=?,error=? WHERE id=?""",
+            (
+                status,
+                provider_message_id if status == "accepted" else None,
+                detail,
+                notification_id,
+            ),
+        )
+    return {"status": status}
+
+
+def opportunity_matches_notification_profile(opportunity, student):
+    county = student["notification_county"]
+    constituency = student["notification_constituency"]
+    if not county or not constituency:
+        return False
+    if opportunity["counties"] and county.casefold() not in {
+        value.casefold() for value in opportunity["counties"]
+    }:
+        return False
+    if opportunity["constituencies"] and constituency.casefold() not in {
+        value.casefold() for value in opportunity["constituencies"]
+    }:
+        return False
+    level_aliases = {
+        "Primary": {"primary"},
+        "Junior Secondary": {"secondary"},
+        "Senior Secondary": {"secondary"},
+        "Tertiary": {"university", "tvet", "tertiary"},
+    }
+    if opportunity["levels"] and not level_aliases.get(
+        student["notification_level"], set()
+    ).intersection(opportunity["levels"]):
+        return False
+    if opportunity["institution_types"] and student["notification_institution_type"] not in opportunity["institution_types"]:
+        return False
+    required_institution = opportunity["institution_name"]
+    if required_institution and (
+        not student["notification_institution_name"]
+        or student["notification_institution_name"].casefold()
+        != required_institution.casefold()
+    ):
+        return False
+    return True
+
+
+def notify_students_about_bursary(opportunity):
+    if opportunity["status"] not in {"open", "upcoming"}:
+        return
+    with get_connection() as connection:
+        students = connection.execute(
+            """SELECT id,phone_number,sms_consent,notification_county,
+                      notification_constituency,notification_level,
+                      notification_institution_type,notification_institution_name
+               FROM users
+               WHERE role='student' AND sms_consent=1 AND phone_number IS NOT NULL
+                 AND notification_county IS NOT NULL
+               ORDER BY id"""
+        ).fetchall()
+    location = ", ".join(
+        value
+        for value in (", ".join(opportunity["counties"] or []),
+                      ", ".join(opportunity["constituencies"] or []))
+        if value
+    ) or "all areas"
+    deadline = opportunity["deadline"] or opportunity["window_note"] or "not confirmed"
+    bursary_type = opportunity["provider_type"].replace("_", " ")
+    award_count = opportunity["number_of_bursaries"]
+    awards = f" {award_count} bursaries." if award_count else ""
+    message = (
+        f"Bursary Radar: {opportunity['name']} ({bursary_type}) "
+        f"from {opportunity['provider']}.{awards} Area: {location}. Deadline: {deadline}. "
+        f"Details: {opportunity['source_url']}"
+    )
+    for student in students:
+        if not opportunity_matches_notification_profile(opportunity, student):
+            continue
+        send_user_sms(
+            student["id"],
+            student["phone_number"],
+            bool(student["sms_consent"]),
+            "bursary_alert",
+            f"bursary:{opportunity['id']}:student:{student['id']}",
+            message,
+            opportunity_id=opportunity["id"],
+        )
+
+
 @app.route("/")
 @login_required
 def index():
@@ -264,6 +485,8 @@ def signup():
         study_level = request.form.get("study_level", "")
         course = request.form.get("course", "").strip()
         custom_course = request.form.get("custom_course", "").strip()
+        phone_number = None
+        sms_consent = False
         valid_levels = {
             "Primary": range(1, 7),
             "Junior Secondary": range(7, 10),
@@ -285,6 +508,12 @@ def signup():
             error = "Password must be at least 6 characters."
         elif account_type == "admin" and not is_go_ke_email(email):
             error = "Admin accounts require an email address ending in .go.ke."
+        elif account_type == "student" and not normalize_kenyan_mobile(
+            request.form.get("phone_number", "")
+        ):
+            error = "Enter a valid Kenyan mobile number, such as +254 7XX XXX XXX."
+        elif account_type == "student" and request.form.get("sms_consent") != "yes":
+            error = "Consent to SMS updates is required to create a student account."
         elif account_type == "student" and study_level not in (*valid_levels.keys(), "Tertiary"):
             error = "Select a valid level of study."
         elif account_type == "student" and study_level in valid_levels and course not in {
@@ -296,6 +525,9 @@ def signup():
         elif account_type == "student" and study_level == "Tertiary" and course not in tertiary_courses:
             error = "Select a course or choose Other."
         else:
+            if account_type == "student":
+                phone_number = normalize_kenyan_mobile(request.form.get("phone_number", ""))
+                sms_consent = True
             if account_type == "student" and study_level == "Tertiary" and course == "Other":
                 course = custom_course
             if account_type == "admin":
@@ -305,10 +537,12 @@ def signup():
                 with sqlite3.connect(USERS_DB) as connection:
                     connection.execute(
                         """INSERT INTO users
-                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,course,study_level,role)
-                        VALUES (?,?,?,?,?,?,?,?,?)""",
+                        (full_name,enrollment_no,email,password_hash,gender,date_of_birth,
+                         course,study_level,role,phone_number,sms_consent)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                         (full_name, enrollment_no, email, generate_password_hash(password),
-                         gender, date_of_birth, course, study_level, account_type),
+                         gender, date_of_birth, course, study_level, account_type,
+                         phone_number, int(sms_consent)),
                     )
                 return redirect(url_for("login"))
             except sqlite3.IntegrityError:
@@ -379,7 +613,11 @@ def public_match():
     institution_type = profile.get("institution_type")
     if institution_type not in (None, "public", "private"):
         return api_error("institution_type must be public or private")
-    return jsonify(match_opportunities(profile))
+    result = match_opportunities(profile)
+    user = current_user()
+    if user and user["role"] == "student" and user["sms_consent"]:
+        save_notification_preferences(user["id"], profile)
+    return jsonify(result)
 
 
 @app.route("/api/applications", methods=["POST"])
@@ -568,11 +806,26 @@ def submit_application():
     except sqlite3.IntegrityError:
         return api_error("You have already applied for this opportunity", 409)
 
+    user = current_user()
+    sms_result = send_user_sms(
+        user["id"],
+        user["phone_number"],
+        bool(user["sms_consent"]),
+        "application_confirmation",
+        f"application:{application_id}",
+        (
+            f"Bursary Radar: Your application for {opportunity['name']} "
+            f"was received successfully. Reference: {application_id[:8]}."
+        ),
+        opportunity_id=opportunity_id,
+        application_id=application_id,
+    )
     return jsonify({
         "application_id": application_id,
         "status": "submitted",
         "residence_status": residence_status,
         "document_checks": document_checks,
+        "notification": sms_result,
     }), 201
 
 
@@ -1057,7 +1310,9 @@ def upload_bursary():
             f"INSERT INTO opportunities ({','.join(columns)}) VALUES ({placeholders})",
             values,
         )
-    return jsonify(get_opportunity_by_id(id)), 201
+    opportunity = get_opportunity_by_id(id)
+    notify_students_about_bursary(opportunity)
+    return jsonify(opportunity), 201
 
 
 @app.route("/api/admin/opportunities/<opportunity_id>", methods=["PUT", "PATCH", "DELETE"])

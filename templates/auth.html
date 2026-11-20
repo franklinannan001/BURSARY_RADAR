@@ -68,6 +68,7 @@
           <label class="field-row"><span class="field-icon" aria-hidden="true">♙</span><span><strong>Password:</strong><input type="password" name="password" placeholder="Create a password" autocomplete="new-password" minlength="6" required></span></label>
         </div>
         <div id="studentDetails">
+          <label class="level-field"><strong>Mobile number:</strong><input type="tel" name="phone_number" placeholder="+254 7XX XXX XXX" autocomplete="tel" inputmode="tel" required></label>
           <div class="registration-grid compact">
             <fieldset class="gender-field">
               <legend>Gender:</legend>
@@ -88,6 +89,7 @@
             <option value="">Select your level first</option>
           </select></label>
           <label id="customCourseField" class="custom-course-field" hidden><strong>Your course name:</strong><input id="customCourse" name="custom_course" type="text" placeholder="Enter your course name" maxlength="120"></label>
+          <label class="sms-consent"><input type="checkbox" name="sms_consent" value="yes" required> <span>I agree to receive SMS application confirmations and bursary alerts for my selected area. Standard messaging charges may apply.</span></label>
         </div>
         <div class="auth-actions">
           <button class="auth-primary register-button" type="submit">Register</button>
