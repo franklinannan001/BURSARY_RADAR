@@ -1,3 +1,4 @@
+This is the opening of windows of information
 # Bursary Radar
 
 Bursary Radar is a mobile-first, low-data funding discovery tool for Kenyan students.
