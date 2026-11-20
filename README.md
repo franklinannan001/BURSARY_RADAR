@@ -1,4 +1,3 @@
-This is the opening of windows of information
 # Bursary Radar
 
 Bursary Radar is a mobile-first, low-data funding discovery tool for Kenyan students.
@@ -28,12 +27,14 @@ flowchart LR
   Draft -->|Approval| SQLite
 ```
 
-The existing Flask/Jinja frontend is preserved. Public matching is stateless and profile details are not stored unless the student submits an application. My Plan is stored only in `localStorage`.
+The Flask/Jinja frontend serves the student and admin pages. Matching for anonymous visitors is stateless: nothing from the profile is stored. If a signed-in student who has given SMS consent searches, their county, constituency, study level and relevant institution details are saved so matching bursary alerts can be targeted; optional need indicators are never stored. Applications store the submitted details and documents (see below). My Plan is stored only in the browser's `localStorage`.
 
 ## Run locally
 
+Windows (PowerShell):
+
 ```powershell
-cd C:\Users\ADMIN\python_projects\BURSARY_RADAR
+cd BURSARY_RADAR
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -41,23 +42,39 @@ copy .env.example .env
 python app.py
 ```
 
+macOS / Linux:
+
+```bash
+cd BURSARY_RADAR
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
+python app.py
+```
+
 Open `http://127.0.0.1:5000`.
 
 ## Environment
 
+Variables the application reads:
+
+- `SECRET_KEY`: signs login sessions. **Required in production.** If it is not set, the app falls back to a public development key, which would let anyone forge a session, including an admin session
 - `ADMIN_TOKEN`: optional token for direct admin API clients; web admins sign in with an admin account
 - `APPLICATION_DOCUMENT_KEY`: required Fernet key for encrypting retained application document images; keep it backed up and unchanged
 - `TESSERACT_CMD`: optional path to the Tesseract OCR executable when it is not on `PATH`
 - `INFOBIP_BASE_URL`, `INFOBIP_API_KEY`: Infobip HTTPS base host and API key; configure in ignored local `.env` or deployment secrets, never in source control
-- `INFOBIP_SENDER_ID`: Infobip-approved SMS sender ID; the example value is only a placeholder
-- `DATABASE_URL`: reserved for a future SQLAlchemy/PostgreSQL backend
+- `INFOBIP_SENDER_ID`: Infobip-approved SMS sender ID; the example value is only a placeholder. SMS is sent only when all three Infobip variables are set
 - `CORS_ORIGINS`: comma-separated allowed browser origins
-- `LLM_PROVIDER=mock`: deterministic offline Notice Reader
-- `LLM_API_KEY`: provider key; not required by mock mode
-- `ENABLE_SMS=false`, `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID`: SMS placeholders
-- `APP_ENV`, `SECRET_KEY`, `HOST`, `PORT`, `FLASK_DEBUG`
+- `HOST`, `PORT`, `FLASK_DEBUG`: used when running `python app.py` locally (debug is on unless `FLASK_DEBUG=0`)
 
-## API overview
+Reserved placeholders (listed in `.env.example` but **not read by the code yet**): `APP_ENV`, `DATABASE_URL`, `LLM_PROVIDER`, `LLM_API_KEY`, `ENABLE_SMS`, `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID`. Setting them has no effect: the Notice Reader is always the offline mock, and SMS is controlled only by the Infobip variables.
+
+## Pages and API overview
+
+Pages: `/` (home), `/signup`, `/login`, `/dashboard`, `/poll`, `/admin`.
+
+Public and student endpoints:
 
 - `GET /healthz`
 - `GET /api/opportunities`
@@ -69,18 +86,28 @@ Open `http://127.0.0.1:5000`.
 - `POST /api/events`
 - `GET|POST /api/poll`
 - `POST /api/applications`: submits a matched bursary application for a signed-in student
-- `/api/admin/applications*`: admin-session-only application listing, document viewing, and status updates
-- Infobip sends an SMS confirmation after an application is stored and alerts opted-in students when an admin publishes an open/upcoming bursary matching their saved area and study profile
-- `POST /api/admin/bursaries`: creates a validated bursary using an authenticated admin session
-- `/api/admin/*`: admin APIs accept an admin login session or, where supported, `X-Admin-Token`; the bursary upload endpoint requires the session
+
+Admin endpoints (admin login session or, where supported, the `X-Admin-Token` header):
+
+- `POST /api/admin/bursaries`: creates a validated bursary; requires an authenticated admin session
+- `GET|POST /api/admin/opportunities`
+- `PUT|PATCH|DELETE /api/admin/opportunities/{id}`
+- `POST /api/admin/opportunities/{id}/verify`
+- `GET /api/admin/applications`, `GET /api/admin/applications/{id}/documents/{type}`, `POST /api/admin/applications/{id}/status`: admin-session-only application listing, document viewing and status updates
+- `GET /api/admin/reports`, `PATCH /api/admin/reports/{id}`
+- `GET /api/admin/metrics`
+- `GET /api/admin/export`
+- `GET /api/admin/drafts`, `POST /api/admin/notices/extract`, `POST /api/admin/drafts/{id}/approve`, `POST /api/admin/drafts/{id}/reject`: Notice Reader draft review
+
+Infobip sends an SMS confirmation after an application is stored, and alerts opted-in students when an admin publishes an open or upcoming bursary matching their saved area and study profile.
 
 Admin accounts are selected during signup and login and require an email ending in `.go.ke`. This checks the address domain only; it does not verify control of the mailbox or government employment. The admin dashboard is at `/admin`.
 
-Open `/api` is not used by Flask; no Swagger UI is enabled. Admin routes use the header-based contract.
+No Swagger UI is enabled.
 
 ## Tests
 
-```powershell
+```bash
 python -m pytest -q
 ```
 
@@ -96,7 +123,7 @@ Set `INFOBIP_BASE_URL` to the HTTPS Infobip API host, `INFOBIP_API_KEY` to a sec
 
 Install Tesseract OCR on local hosts (and put its executable on `PATH`, or set `TESSERACT_CMD`). Render installs the Tesseract system package during build. Generate an application-document key with:
 
-```powershell
+```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
@@ -107,7 +134,7 @@ Set that value as `APPLICATION_DOCUMENT_KEY` in `.env` and in the deployment env
 1. Push the project to a Git repository.
 2. Create a Python Web Service from the repository.
 3. Render will read `render.yaml`.
-4. Set `SECRET_KEY`, `APPLICATION_DOCUMENT_KEY`, `CORS_ORIGINS` and `APP_ENV=production`. Set `ADMIN_TOKEN` only if direct API-token access is required.
+4. In the Render dashboard, set `SECRET_KEY` (a long random value), `APPLICATION_DOCUMENT_KEY` and `CORS_ORIGINS`, plus `INFOBIP_API_KEY`. Set `ADMIN_TOKEN` only if direct API-token access is required. Do not rely on `APP_ENV`; the code does not read it.
 5. Use `gunicorn app:app --bind 0.0.0.0:$PORT` as the start command.
 
 ## SQLite and redeployment
@@ -117,7 +144,7 @@ Export reviewed data with `GET /api/admin/export` as a backup, or configure a pe
 
 ## Seed and verification
 
-The database starts without opportunity listings. Government officials can sign in at `/admin` and submit bursaries with their official source, eligibility, number of awards, application window, disbursement dates and application details. No sample or seed opportunities are bundled.
+The code does not seed any opportunity listings, and no real or sample opportunities are bundled in the repository. Government officials can sign in at `/admin` and submit bursaries with their official source, eligibility, number of awards, application window, disbursement dates and application details. Any demonstration bursary or admin account created for a presentation must be clearly labelled "DEMO ONLY". Do not commit `*.db` files: they can contain accounts and applications.
 
 See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) and [ROADMAP.md](docs/ROADMAP.md).
 
@@ -127,6 +154,5 @@ See [DATA_VERIFICATION.md](docs/DATA_VERIFICATION.md), [DEMO_SCRIPT.md](docs/DEM
 - The database is local unless migrated to a hosted database.
 - SMS reminder scheduling is preview-only. Application confirmations and new matching bursary alerts use Infobip when configured.
 - Mock Notice Reader output requires human review and is not an extraction engine.
-- Student matching profiles are not stored unless submitted with an application.
-thank you
-
+- Anonymous matching profiles are not stored. Profiles of signed-in, SMS-consenting students are saved to target alerts, and application details are stored when an application is submitted.
+- Rate limits use in-memory storage, which resets on restart and is not shared across workers.
